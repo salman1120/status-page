@@ -1,11 +1,12 @@
-run = "npm run dev"
+run = "apt-get update -y && apt-get install -y openssl libssl1.1 && npm run build && npm run start"
 modules = ["nodejs-18:v18-20230807-bd784b9"]
 hidden = [".config", "package-lock.json"]
 
 [nix]
-channel = "stable-23_11"
+channel = "stable-22_11"
 
 [env]
+XDG_CONFIG_HOME = "/home/runner/.config"
 PATH = "/home/runner/$REPL_SLUG/.config/npm/node_global/bin:/home/runner/$REPL_SLUG/node_modules/.bin:$PATH"
 npm_config_prefix = "/home/runner/$REPL_SLUG/.config/npm/node_global"
 NEXT_TELEMETRY_DISABLED = "1"
@@ -27,6 +28,7 @@ start = "typescript-language-server --stdio"
 build = ["sh", "-c", "npm run build"]
 run = ["sh", "-c", "npm run start"]
 deploymentTarget = "cloudrun"
+ignorePorts = false
 
 [hosting]
 route = "/"
