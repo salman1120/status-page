@@ -6,7 +6,16 @@ const nextConfig = {
   output: 'standalone',
   // Allow Replit domains for images
   images: {
-    domains: ['localhost', '*.repl.co', '*.repl.dev'],
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: '**.repl.co',
+      },
+      {
+        protocol: 'https',
+        hostname: '**.repl.dev',
+      },
+    ],
   },
   // Add headers for security but allow Replit iframe
   async headers() {
