@@ -58,6 +58,51 @@ A modern, real-time status page application built with Next.js 14, React, and Pr
    npm run dev
    ```
 
+## Deployment on Replit
+
+1. Create a new Repl:
+   - Go to [Replit](https://replit.com)
+   - Click "Create Repl"
+   - Choose "Import from GitHub"
+   - Paste your repository URL
+
+2. Configure Environment Variables:
+   - Click on "Tools" in the left sidebar
+   - Select "Secrets"
+   - Add all the required environment variables:
+     ```
+     DATABASE_URL=
+     NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=
+     CLERK_SECRET_KEY=
+     NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
+     NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
+     NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL=/dashboard
+     NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL=/dashboard
+     PUSHER_APP_ID=
+     NEXT_PUBLIC_PUSHER_KEY=
+     PUSHER_SECRET=
+     RESEND_API_KEY=
+     ```
+
+3. Database Setup:
+   - Replit provides a built-in PostgreSQL database
+   - The connection URL will be automatically added to your environment variables
+   - Run database migrations:
+     ```bash
+     npx prisma generate
+     npx prisma db push
+     ```
+
+4. Start the Application:
+   - Click the "Run" button
+   - Your app will be available at your Repl URL
+
+## Monitoring on Replit
+
+- View logs in the "Console" tab
+- Monitor database in the "Tools > Database" section
+- Check application performance in "Tools > Performance"
+
 ## Project Structure
 
 ```

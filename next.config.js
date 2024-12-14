@@ -2,6 +2,12 @@
 const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
+  // Configure for Replit
+  output: 'standalone',
+  // Allow Replit domains for images
+  images: {
+    domains: ['localhost', 'replit.com', '*.repl.co'],
+  },
   // Add headers for security
   async headers() {
     return [
