@@ -2,14 +2,6 @@
 const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
-  images: {
-    domains: ['localhost', process.env.VERCEL_URL, process.env.HEROKU_APP_NAME + '.herokuapp.com'].filter(Boolean),
-  },
-  // Enable static optimization where possible
-  experimental: {
-    optimizeCss: true,
-    optimizePackageImports: ['@clerk/nextjs', '@prisma/client'],
-  },
   // Add headers for security
   async headers() {
     return [
