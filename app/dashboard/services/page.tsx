@@ -1,14 +1,26 @@
-import { Button } from "@/components/ui/button"
+import { Heading } from "@/components/ui/heading"
 import { ServiceForm } from "@/components/services/service-form"
 import { ServiceList } from "@/components/services/service-list"
+import { Separator } from "@/components/ui/separator"
+import { auth } from "@clerk/nextjs"
+import { redirect } from "next/navigation"
 
-export default function ServicesPage() {
+export default async function ServicesPage() {
+  const { userId } = auth()
+  
+  if (!userId) {
+    redirect("/sign-in")
+  }
+
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">Services</h1>
+    <div className="flex-1 space-y-6 p-8 pt-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <Heading title="Services" description="Monitor and manage your service statuses" />
+        </div>
         <ServiceForm />
       </div>
+      <Separator />
       <ServiceList />
     </div>
   )

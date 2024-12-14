@@ -28,9 +28,10 @@ model Organization {
   id        String    @id @default(cuid())
   name      String
   slug      String    @unique
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
   users     User[]
   services  Service[]
+  incidents Incident[]
 }
 
 model User {
@@ -64,6 +65,8 @@ model Incident {
   status         IncidentStatus @default(INVESTIGATING)
   service        Service        @relation(fields: [serviceId], references: [id])
   serviceId      String
+  organization   Organization   @relation(fields: [organizationId], references: [id])
+  organizationId String
   createdBy      User           @relation(fields: [createdById], references: [id])
   createdById    String
   startedAt      DateTime       @default(now())
