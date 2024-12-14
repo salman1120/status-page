@@ -8,16 +8,23 @@ channel = "stable-23_11"
 [env]
 PATH = "/home/runner/$REPL_SLUG/.config/npm/node_global/bin:/home/runner/$REPL_SLUG/node_modules/.bin:$PATH"
 npm_config_prefix = "/home/runner/$REPL_SLUG/.config/npm/node_global"
+PORT = "3000"
+NEXT_PUBLIC_PORT = "3000"
 
 [packager]
 language = "nodejs"
   [packager.features]
   packageSearch = true
   guessImports = true
-  enabledForHosting = false
+  enabledForHosting = true
 
 [languages]
 [languages.javascript]
 pattern = "**/{*.js,*.jsx,*.ts,*.tsx}"
 [languages.javascript.languageServer]
 start = "typescript-language-server --stdio"
+
+[deployment]
+build = ["sh", "-c", "npm run build"]
+run = ["sh", "-c", "npm run start"]
+deploymentTarget = "cloudrun"

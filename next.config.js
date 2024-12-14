@@ -6,18 +6,14 @@ const nextConfig = {
   output: 'standalone',
   // Allow Replit domains for images
   images: {
-    domains: ['localhost', 'replit.com', '*.repl.co'],
+    domains: ['localhost', '*.repl.co', '*.repl.dev'],
   },
-  // Add headers for security
+  // Add headers for security but allow Replit iframe
   async headers() {
     return [
       {
         source: '/:path*',
         headers: [
-          {
-            key: 'X-Frame-Options',
-            value: 'DENY',
-          },
           {
             key: 'X-Content-Type-Options',
             value: 'nosniff',
@@ -29,6 +25,16 @@ const nextConfig = {
         ],
       },
     ]
+  },
+  // Configure for Replit environment
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+      };
+    }
+    return config;
   },
 }
 
