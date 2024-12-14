@@ -14,7 +14,7 @@ import {
 } from 'chart.js'
 import { Card } from '@/components/ui/card'
 import { useEffect, useRef } from "react"
-import { ServiceMetric } from "@prisma/client"
+import { ServiceMetricDisplay } from "@/types/metrics"
 
 ChartJS.register(
   CategoryScale,
@@ -28,7 +28,7 @@ ChartJS.register(
 
 interface UptimeChartProps {
   /** List of service metrics to display */
-  data: ServiceMetric[]
+  data: ServiceMetricDisplay[]
   /** Name of the service */
   serviceName: string
 }

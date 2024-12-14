@@ -4,22 +4,12 @@ import { useEffect, useState } from "react"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Incident, IncidentStatus } from "@prisma/client"
+import { IncidentStatus } from "@prisma/client"
 import { pusherClient } from "@/lib/pusher"
 import { formatDistanceToNow } from "date-fns"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
-
-interface ExtendedIncident extends Incident {
-  service: {
-    name: string
-  }
-  updates: {
-    id: string
-    message: string
-    createdAt: string
-  }[]
-}
+import { ExtendedIncident } from "@/types"
 
 interface IncidentListProps {
   initialIncidents: ExtendedIncident[]

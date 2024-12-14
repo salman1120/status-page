@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import { UptimeChart } from '@/components/metrics/uptime-chart'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { ServiceMetricDisplay } from '@/types/metrics'
 
 export default async function ServicePage({
   params,
@@ -83,9 +84,13 @@ export default async function ServicePage({
 
       <UptimeChart
         data={service.metrics.map(m => ({
+          id: m.id,
+          status: m.status,
+          serviceId: m.serviceId,
           timestamp: m.timestamp.toISOString(),
+          latency: m.latency,
           uptime: m.uptime,
-        }))}
+        } as ServiceMetricDisplay))}
         serviceName={service.name}
       />
 

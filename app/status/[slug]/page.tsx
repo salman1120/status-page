@@ -50,9 +50,20 @@ export default async function StatusPage({ params }: StatusPageProps) {
     a.name.localeCompare(b.name)
   )
 
-  // Sort incidents by startedAt date
-  const sortedIncidents = [...organization.incidents].sort((a, b) => 
-    new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime()
+  // Sort incidents by creation time
+  const incidents = organization.incidents as any[]
+  const sortedIncidents = [...incidents].map(incident => ({
+    ...incident,
+    createdAt: incident.createdAt.toISOString(),
+    updatedAt: incident.updatedAt.toISOString(),
+    startedAt: incident.startedAt.toISOString(),
+    resolvedAt: incident.resolvedAt?.toISOString() || null,
+    updates: incident.updates?.map(update => ({
+      ...update,
+      createdAt: typeof update.createdAt === 'string' ? update.createdAt : update.createdAt.toISOString()
+    }))
+  })).sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   )
 
   return (
