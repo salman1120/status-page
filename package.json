@@ -1,12 +1,16 @@
 {
-  "name": "status-page-app",
+  "name": "status-page",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint"
+    "build": "prisma generate && next build",
+    "start": "next start -p $PORT",
+    "lint": "next lint",
+    "postinstall": "prisma generate"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   },
   "dependencies": {
     "@clerk/nextjs": "^4.29.1",
@@ -30,6 +34,7 @@
     "react-chartjs-2": "^5.2.0",
     "react-dom": "^18",
     "resend": "^2.0.0",
+    "sonner": "^1.7.1",
     "tailwind-merge": "^2.5.5",
     "tailwindcss-animate": "^1.0.7"
   },

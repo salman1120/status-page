@@ -1,49 +1,42 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
+import { redirect } from "next/navigation"
+import { prisma } from "@/lib/prisma"
 
-const MOCK_SERVICES = [
-  { 
-    name: "Website", 
-    status: "Operational", 
-    color: "green" 
-  },
-  { 
-    name: "API", 
-    status: "Degraded Performance", 
-    color: "yellow" 
-  },
-  { 
-    name: "Database", 
-    status: "Operational", 
-    color: "green" 
+export default async function PublicStatusPage() {
+  // Get the first organization
+  const organization = await prisma.organization.findFirst({
+    include: {
+      services: true,
+      incidents: {
+        where: {
+          OR: [
+            { status: "INVESTIGATING" },
+            { status: "IDENTIFIED" },
+            { status: "MONITORING" },
+            { 
+              AND: [
+                { status: "RESOLVED" },
+                { resolvedAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } }
+              ]
+            }
+          ]
+        },
+        include: {
+          service: true,
+          updates: {
+            orderBy: {
+              createdAt: "desc"
+            },
+            take: 5
+          }
+        }
+      }
+    }
+  })
+
+  if (!organization) {
+    return redirect("/setup")
   }
-]
 
-export default function PublicStatusPage() {
-  return (
-    <div className="container mx-auto px-4 py-8">
-      <h1 className="text-4xl font-bold mb-6 text-center">
-        System Status
-      </h1>
-      
-      <div className="max-w-2xl mx-auto space-y-4">
-        {MOCK_SERVICES.map((service) => (
-          <Card key={service.name}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0">
-              <CardTitle>{service.name}</CardTitle>
-              <Badge 
-                variant={
-                  service.status === "Operational" ? "default" : 
-                  service.status === "Degraded Performance" ? "warning" : 
-                  "destructive"
-                }
-              >
-                {service.status}
-              </Badge>
-            </CardHeader>
-          </Card>
-        ))}
-      </div>
-    </div>
-  )
+  // Redirect to the organization's status page
+  return redirect(`/status/${organization.slug}`)
 }

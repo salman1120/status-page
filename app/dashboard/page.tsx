@@ -1,10 +1,11 @@
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import Link from "next/link"
 import { auth } from "@clerk/nextjs"
 import { redirect } from "next/navigation"
-import prisma from "@/lib/prisma"
+import Link from "next/link"
 import { Activity, AlertCircle, Settings, Shield, Users } from "lucide-react"
+import { prisma } from "@/lib/prisma"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { StatusBadge } from "@/components/status-badge"
 
 export default async function Dashboard() {
   const { userId } = auth()
@@ -18,12 +19,26 @@ export default async function Dashboard() {
     where: {
       users: {
         some: {
-          clerkId: userId
-        }
-      }
+          clerkId: userId,
+        },
+      },
     },
     include: {
-      services: true,
+      services: {
+        include: {
+          metrics: {
+            orderBy: {
+              timestamp: 'desc'
+            },
+            take: 1,
+            select: {
+              uptime: true,
+              latency: true,
+              timestamp: true
+            }
+          }
+        }
+      },
       incidents: true
     }
   })
@@ -164,6 +179,42 @@ export default async function Dashboard() {
             </div>
           </CardContent>
         </Card>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {organization.services.map(service => (
+          <Link 
+            key={service.id} 
+            href={`/dashboard/services/${service.id}`}
+            className="block"
+          >
+            <Card className="transition-all hover:shadow-md">
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between">
+                  <span>{service.name}</span>
+                  <StatusBadge status={service.status} />
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">{service.description}</p>
+                {service.metrics[0] && (
+                  <div className="mt-2 text-sm">
+                    <div className="flex justify-between items-center">
+                      <span>Uptime</span>
+                      <span className="font-medium">{service.metrics[0].uptime.toFixed(2)}%</span>
+                    </div>
+                    {service.metrics[0].latency && (
+                      <div className="flex justify-between items-center">
+                        <span>Latency</span>
+                        <span className="font-medium">{service.metrics[0].latency.toFixed(0)}ms</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </Link>
+        ))}
       </div>
     </div>
   )

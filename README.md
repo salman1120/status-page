@@ -1,155 +1,186 @@
-# Status Page Application
+# Status Page
 
-## Overview
-A comprehensive status page application for monitoring and reporting service statuses in real-time.
+A modern, real-time status page application built with Next.js 14, React, and Prisma. Monitor your services, track incidents, and keep your users informed about system status.
 
 ## Features
-- 🔐 User Authentication & Team Management
-- 🏢 Multi-tenant Organization Support
-- 🚦 Service Status Management
-- ⚡ Real-time Updates
-- 🔔 Incident Tracking and Updates
-- 📊 Public Status Page
-- 📈 Uptime Metrics
-- ✉️ Email Notifications
-- 🔌 External API Access
-- 🎨 Clean, Modern UI
+
+- 🔄 Real-time service status updates
+- 📊 Service metrics tracking (uptime & latency)
+- 📧 Email notifications for status changes
+- 📈 Beautiful metric visualizations
+- 🔐 Secure authentication with Clerk
+- 🌐 Public status page for each organization
+- 📱 Responsive design for all devices
 
 ## Tech Stack
-- Next.js 14 with App Router
-- TypeScript
-- Prisma (PostgreSQL)
-- Clerk (Authentication)
-- Pusher (Real-time updates)
-- Chart.js (Metrics)
-- Resend (Email notifications)
-- Tailwind CSS & Shadcn UI
-- Vercel (Deployment)
 
-## Prerequisites
-- Node.js 18+
-- PostgreSQL database
-- Clerk account (for authentication)
-- Pusher account (for real-time updates)
-- Resend account (for email notifications)
-- Vercel account (for deployment)
+- **Framework**: Next.js 14 with App Router
+- **Language**: TypeScript
+- **Database**: PostgreSQL with Prisma ORM
+- **Authentication**: Clerk
+- **UI Components**: shadcn/ui
+- **Styling**: Tailwind CSS
+- **Charts**: Chart.js
+- **Real-time**: Pusher
+- **Email**: Resend
 
-## Local Development
+## Getting Started
 
 1. Clone the repository
-```bash
-git clone https://github.com/yourusername/status-page-app.git
-cd status-page-app
-```
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
 
-2. Install dependencies
-```bash
-npm install
-```
+3. Set up environment variables:
+   ```env
+   DATABASE_URL=
+   NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=
+   CLERK_SECRET_KEY=
+   NEXT_PUBLIC_CLERK_SIGN_IN_URL=
+   NEXT_PUBLIC_CLERK_SIGN_UP_URL=
+   NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL=
+   NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL=
+   PUSHER_APP_ID=
+   NEXT_PUBLIC_PUSHER_KEY=
+   PUSHER_SECRET=
+   RESEND_API_KEY=
+   ```
 
-3. Set up environment variables
-Create a `.env` file with:
-```
-# Database
-DATABASE_URL="postgresql://user:password@localhost:5432/statuspage"
+4. Initialize the database:
+   ```bash
+   npx prisma generate
+   npx prisma db push
+   ```
 
-# Clerk Authentication
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=your_clerk_key
-CLERK_SECRET_KEY=your_clerk_secret
+5. Run the development server:
+   ```bash
+   npm run dev
+   ```
 
-# Pusher
-PUSHER_APP_ID=your_pusher_app_id
-NEXT_PUBLIC_PUSHER_KEY=your_pusher_key
-PUSHER_SECRET=your_pusher_secret
-NEXT_PUBLIC_PUSHER_CLUSTER=your_pusher_cluster
+## Deployment to Heroku
 
-# Email
-RESEND_API_KEY=your_resend_api_key
+### Prerequisites
+1. [Heroku CLI](https://devcenter.heroku.com/articles/heroku-cli) installed
+2. Heroku account
+3. PostgreSQL add-on (will be added during deployment)
 
-# External API
-STATUS_API_KEY=your_generated_api_key
-```
+### Steps
 
-4. Initialize the database
-```bash
-npx prisma generate
-npx prisma db push
-```
+1. Login to Heroku CLI:
+   ```bash
+   heroku login
+   ```
 
-5. Run the development server
-```bash
-npm run dev
-```
+2. Create a new Heroku app:
+   ```bash
+   heroku create your-status-page
+   ```
 
-## External API Documentation
+3. Add PostgreSQL add-on:
+   ```bash
+   heroku addons:create heroku-postgresql:mini
+   ```
 
-### Get System Status
-```http
-GET /api/v1/status?api_key=your_api_key
-```
+4. Configure environment variables:
+   ```bash
+   heroku config:set NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=your_key
+   heroku config:set CLERK_SECRET_KEY=your_secret
+   heroku config:set NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
+   heroku config:set NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
+   heroku config:set NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL=/dashboard
+   heroku config:set NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL=/dashboard
+   heroku config:set PUSHER_APP_ID=your_id
+   heroku config:set NEXT_PUBLIC_PUSHER_KEY=your_key
+   heroku config:set PUSHER_SECRET=your_secret
+   heroku config:set RESEND_API_KEY=your_key
+   ```
 
-Response:
-```json
-{
-  "status": "ok",
-  "timestamp": "2024-12-14T01:13:57Z",
-  "services": [
-    {
-      "id": "1",
-      "name": "API",
-      "status": "OPERATIONAL",
-      "updatedAt": "2024-12-14T01:13:57Z"
-    }
-  ],
-  "active_incidents": [
-    {
-      "id": "1",
-      "title": "API Latency Issues",
-      "status": "INVESTIGATING",
-      "serviceId": "1",
-      "startedAt": "2024-12-14T01:10:00Z"
-    }
-  ]
-}
-```
+5. Push to Heroku:
+   ```bash
+   git push heroku main
+   ```
 
-## Deployment to Vercel
+6. Run database migrations:
+   ```bash
+   heroku run npx prisma db push
+   ```
 
-1. Create a new project on Vercel
-   - Connect your GitHub repository
-   - Vercel will automatically detect Next.js
+7. Open your app:
+   ```bash
+   heroku open
+   ```
 
-2. Configure environment variables
-   - Add all environment variables from `.env` to Vercel project settings
-   - Ensure all NEXT_PUBLIC_ variables are properly set
+### Monitoring
 
-3. Configure Vercel PostgreSQL
-   - Create a new Postgres database in Vercel
-   - Update DATABASE_URL in environment variables
-   - Run prisma db push in Vercel deployment settings
+- View logs:
+  ```bash
+  heroku logs --tail
+  ```
 
-4. Deploy
-   - Push your changes to GitHub
-   - Vercel will automatically deploy your application
-   - Your status page will be live at your-project.vercel.app
+- Check dyno status:
+  ```bash
+  heroku ps
+  ```
+
+- Monitor database:
+  ```bash
+  heroku pg:info
+  ```
+
+### Troubleshooting
+
+1. If the build fails:
+   ```bash
+   heroku builds:cancel
+   git commit --allow-empty -m "Retry build"
+   git push heroku main
+   ```
+
+2. If database connection fails:
+   ```bash
+   heroku pg:credentials:url
+   ```
+   Check if DATABASE_URL is correctly set in config vars
+
+3. To restart the app:
+   ```bash
+   heroku restart
+   ```
 
 ## Project Structure
+
 ```
 status-page/
 ├── app/                    # Next.js app directory
 │   ├── api/               # API routes
-│   │   └── v1/           # External API endpoints
 │   ├── dashboard/         # Dashboard pages
-│   └── status/           # Public status page
+│   └── [orgSlug]/        # Public status pages
 ├── components/            # React components
-│   ├── incidents/        # Incident management
-│   └── services/         # Service management
-├── lib/                   # Utility functions
-└── prisma/               # Database schema
+│   ├── incidents/        # Incident-related components
+│   ├── metrics/         # Metric visualization components
+│   └── ui/              # Reusable UI components
+├── lib/                   # Utility functions and configurations
+├── prisma/               # Database schema and migrations
+└── types/                # TypeScript type definitions
 ```
 
+## API Routes
+
+- `POST /api/services`: Create a new service
+- `PATCH /api/services/[id]`: Update service status
+- `POST /api/incidents`: Create an incident
+- `PATCH /api/incidents/[id]`: Update incident status
+- `GET /api/public/[orgSlug]/status`: Get public status page data
+- `POST /api/cron/collect-metrics`: Collect service metrics
+
 ## Contributing
-Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
+
+1. Fork the repository
+2. Create a new branch
+3. Make your changes
+4. Submit a pull request
 
 ## License
-This project is licensed under the MIT License.
+
+MIT License

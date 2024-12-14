@@ -2,6 +2,7 @@ import { auth } from "@clerk/nextjs"
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { ServiceStatus } from "@prisma/client"
+import { pusherServer } from "@/lib/pusher"
 
 export async function GET() {
   try {
@@ -65,6 +66,9 @@ export async function POST(req: Request) {
         organizationId: user.organization.id,
       },
     })
+
+    // Notify clients about the new service
+    await pusherServer.trigger("services", "service-created", service)
 
     return NextResponse.json(service)
   } catch (error) {

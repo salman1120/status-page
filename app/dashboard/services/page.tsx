@@ -4,12 +4,28 @@ import { ServiceList } from "@/components/services/service-list"
 import { Separator } from "@/components/ui/separator"
 import { auth } from "@clerk/nextjs"
 import { redirect } from "next/navigation"
+import { prisma } from "@/lib/prisma"
 
 export default async function ServicesPage() {
   const { userId } = auth()
   
   if (!userId) {
     redirect("/sign-in")
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { clerkId: userId },
+    include: {
+      organization: {
+        include: {
+          services: true,
+        },
+      },
+    },
+  })
+
+  if (!user?.organization) {
+    redirect("/setup")
   }
 
   return (
@@ -21,7 +37,7 @@ export default async function ServicesPage() {
         <ServiceForm />
       </div>
       <Separator />
-      <ServiceList />
+      <ServiceList initialServices={user.organization.services} />
     </div>
   )
 }

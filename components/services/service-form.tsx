@@ -13,18 +13,20 @@ export function ServiceForm() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+  const [formData, setFormData] = useState({
+    name: "",
+    description: "",
+    status: ServiceStatus.OPERATIONAL
+  })
+
+  const handleChange = (field: string, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }))
+  }
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setLoading(true)
     setError("")
-
-    const formData = new FormData(event.currentTarget)
-    const data = {
-      name: formData.get("name") as string,
-      description: formData.get("description") as string,
-      status: formData.get("status") as ServiceStatus,
-    }
 
     try {
       const response = await fetch("/api/services", {
@@ -32,13 +34,20 @@ export function ServiceForm() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(data),
+        body: JSON.stringify(formData),
       })
 
       if (!response.ok) {
         throw new Error("Failed to create service")
       }
 
+      // Clear form
+      setFormData({
+        name: "",
+        description: "",
+        status: ServiceStatus.OPERATIONAL
+      })
+      
       router.push("/dashboard/services")
       router.refresh()
     } catch (error) {
@@ -60,8 +69,10 @@ export function ServiceForm() {
             id="name"
             name="name"
             placeholder="Enter service name"
-            required
+            value={formData.name}
+            onChange={(e) => handleChange("name", e.target.value)}
             disabled={loading}
+            required
           />
         </div>
 
@@ -73,6 +84,8 @@ export function ServiceForm() {
             id="description"
             name="description"
             placeholder="Enter service description"
+            value={formData.description}
+            onChange={(e) => handleChange("description", e.target.value)}
             disabled={loading}
           />
         </div>
@@ -81,15 +94,23 @@ export function ServiceForm() {
           <label htmlFor="status" className="text-sm font-medium">
             Initial Status
           </label>
-          <Select name="status" defaultValue="OPERATIONAL">
+          <Select
+            name="status"
+            value={formData.status}
+            onValueChange={(value) => handleChange("status", value)}
+            disabled={loading}
+          >
             <SelectTrigger>
               <SelectValue placeholder="Select status" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="OPERATIONAL">Operational</SelectItem>
-              <SelectItem value="DEGRADED_PERFORMANCE">Degraded Performance</SelectItem>
-              <SelectItem value="PARTIAL_OUTAGE">Partial Outage</SelectItem>
-              <SelectItem value="MAJOR_OUTAGE">Major Outage</SelectItem>
+              {Object.entries(ServiceStatus).map(([key, value]) => (
+                <SelectItem key={key} value={value}>
+                  {key.split("_").map(word => 
+                    word.charAt(0) + word.slice(1).toLowerCase()
+                  ).join(" ")}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>

@@ -1,4 +1,4 @@
-// This is your Prisma schema file,
+// This is your Prisma schema file
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
@@ -10,74 +10,93 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// Service status represents the current operational state of a service
 enum ServiceStatus {
-  OPERATIONAL
-  DEGRADED_PERFORMANCE
-  PARTIAL_OUTAGE
-  MAJOR_OUTAGE
+  OPERATIONAL           // Service is functioning normally
+  DEGRADED_PERFORMANCE  // Service is experiencing slowdowns
+  PARTIAL_OUTAGE       // Some features are unavailable
+  MAJOR_OUTAGE         // Service is completely down
 }
 
+// Incident status tracks the lifecycle of an incident
 enum IncidentStatus {
-  INVESTIGATING
-  IDENTIFIED
-  MONITORING
-  RESOLVED
+  INVESTIGATING  // Team is investigating the issue
+  IDENTIFIED    // Root cause has been identified
+  MONITORING    // Fix has been applied, monitoring for stability
+  RESOLVED      // Incident has been fully resolved
 }
 
+// Organization model represents a team or company using the status page
 model Organization {
-  id        String    @id @default(cuid())
-  name      String
-  slug      String    @unique
-  createdAt DateTime  @default(now())
-  users     User[]
-  services  Service[]
-  incidents Incident[]
+  id        String    @id @default(cuid())  // Unique identifier
+  name      String                          // Organization display name
+  slug      String    @unique              // URL-friendly identifier
+  createdAt DateTime  @default(now())      // Creation timestamp
+  users     User[]                         // Team members
+  services  Service[]                      // Monitored services
+  incidents Incident[]                     // Incident history
 }
 
+// User model for team members and administrators
 model User {
-  id             String         @id @default(cuid())
-  clerkId        String         @unique
-  email          String         @unique
-  name           String?
-  role           String         @default("member")
-  organization   Organization   @relation(fields: [organizationId], references: [id])
-  organizationId String
-  createdAt      DateTime       @default(now())
-  incidents      Incident[]
+  id             String       @id @default(cuid())
+  clerkId        String       @unique              // External auth ID from Clerk
+  email          String       @unique              // User's email address
+  name           String?                           // Display name
+  role           String       @default("member")   // User role (member/admin)
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  organizationId String                           // Foreign key to organization
+  createdAt      DateTime     @default(now())     // Account creation date
+  incidents      Incident[]                       // Incidents created by user
 }
 
+// Service model represents a monitored service or component
 model Service {
   id             String         @id @default(cuid())
-  name           String
-  description    String?
+  name           String                            // Service display name
+  description    String?                           // Optional description
   status         ServiceStatus  @default(OPERATIONAL)
   organization   Organization   @relation(fields: [organizationId], references: [id])
   organizationId String
-  incidents      Incident[]
+  incidents      Incident[]                        // Related incidents
+  metrics        ServiceMetric[]                   // Performance metrics
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 }
 
+// ServiceMetric tracks performance and uptime metrics
+model ServiceMetric {
+  id          String        @id @default(cuid())
+  service     Service       @relation(fields: [serviceId], references: [id])
+  serviceId   String
+  status      ServiceStatus                    // Current service status
+  timestamp   DateTime      @default(now())    // When metric was recorded
+  latency     Float?                          // Response time in milliseconds
+  uptime      Float                           // Uptime percentage (0-100)
+}
+
+// Incident model for tracking service disruptions
 model Incident {
   id             String         @id @default(cuid())
-  title          String
-  description    String
+  title          String                            // Incident title
+  description    String                            // Detailed description
   status         IncidentStatus @default(INVESTIGATING)
   service        Service        @relation(fields: [serviceId], references: [id])
   serviceId      String
   organization   Organization   @relation(fields: [organizationId], references: [id])
   organizationId String
-  createdBy      User           @relation(fields: [createdById], references: [id])
+  createdBy      User          @relation(fields: [createdById], references: [id])
   createdById    String
-  startedAt      DateTime       @default(now())
-  resolvedAt     DateTime?
-  updates        IncidentUpdate[]
+  startedAt      DateTime      @default(now())    // When incident began
+  resolvedAt     DateTime?                        // When incident was resolved
+  updates        IncidentUpdate[]                 // Status updates
 }
 
+// IncidentUpdate tracks status changes and communications
 model IncidentUpdate {
   id          String    @id @default(cuid())
   incident    Incident  @relation(fields: [incidentId], references: [id])
   incidentId  String
-  message     String
-  createdAt   DateTime  @default(now())
+  message     String                           // Update message
+  createdAt   DateTime  @default(now())        // When update was posted
 }

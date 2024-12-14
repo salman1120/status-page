@@ -77,3 +77,43 @@ export async function GET() {
     )
   }
 }
+
+export async function PATCH(req: Request) {
+  try {
+    const { userId } = auth()
+    
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { clerkId: userId },
+      include: { organization: true },
+    })
+
+    if (!user?.organization) {
+      return NextResponse.json({ error: "Organization not found" }, { status: 404 })
+    }
+
+    const body = await req.json()
+    const { name } = body
+
+    if (!name || typeof name !== "string") {
+      return NextResponse.json({ error: "Invalid name" }, { status: 400 })
+    }
+
+    // Update organization
+    const organization = await prisma.organization.update({
+      where: { id: user.organization.id },
+      data: { name }
+    })
+
+    return NextResponse.json(organization)
+  } catch (error) {
+    console.error("Error updating organization:", error)
+    return NextResponse.json(
+      { error: "Failed to update organization" },
+      { status: 500 }
+    )
+  }
+}
