@@ -12,17 +12,25 @@ export default function SetupPage() {
   const [name, setName] = useState("")
   const [slug, setSlug] = useState("")
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState("")
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   useEffect(() => {
     // Check if user already has an organization
     const checkOrganization = async () => {
       try {
-        const response = await fetch("/api/organization")
+        const response = await fetch("/api/organization", {
+          method: "GET",
+          headers: {
+            "Cache-Control": "no-cache"
+          }
+        })
         const data = await response.json()
         
-        if (data && !data.error) {
-          // If organization exists, redirect to dashboard
-          router.push("/dashboard")
+        if (data && !data.error && data.id) {
+          // Only redirect if we actually have an organization
+          window.location.href = "/dashboard"
+          return
         }
       } catch (error) {
         console.error("Error checking organization:", error)
@@ -32,15 +40,21 @@ export default function SetupPage() {
     }
 
     checkOrganization()
-  }, [router])
+  }, []) // Remove router from dependencies
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (isSubmitting) return
+    
+    setError("")
+    setIsSubmitting(true)
+    
     try {
       const response = await fetch("/api/organization", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "Cache-Control": "no-cache"
         },
         body: JSON.stringify({
           name,
@@ -48,15 +62,20 @@ export default function SetupPage() {
         }),
       })
 
-      if (response.ok) {
-        router.push("/dashboard")
+      const data = await response.json()
+      
+      if (response.ok && data.id) {
+        // Use window.location for a hard redirect
+        window.location.href = "/dashboard"
+        return
       } else {
-        const data = await response.json()
-        alert(data.error || "Failed to create organization")
+        setError(data.error || "Failed to create organization")
       }
     } catch (error) {
       console.error("Error creating organization:", error)
-      alert("Failed to create organization")
+      setError("Failed to create organization")
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -76,6 +95,9 @@ export default function SetupPage() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
+            {error && (
+              <div className="text-red-500 text-sm">{error}</div>
+            )}
             <div className="space-y-2">
               <Label htmlFor="name">Organization Name</Label>
               <Input
@@ -84,6 +106,7 @@ export default function SetupPage() {
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Acme Corp"
                 required
+                disabled={isSubmitting}
               />
             </div>
             
@@ -96,14 +119,15 @@ export default function SetupPage() {
                 placeholder="acme-corp"
                 pattern="[a-zA-Z0-9-]+"
                 required
+                disabled={isSubmitting}
               />
               <p className="text-sm text-gray-500">
                 Used in URLs. Only letters, numbers, and hyphens.
               </p>
             </div>
 
-            <Button type="submit" className="w-full">
-              Create Organization
+            <Button type="submit" className="w-full" disabled={isSubmitting}>
+              {isSubmitting ? "Creating..." : "Create Organization"}
             </Button>
           </form>
         </CardContent>

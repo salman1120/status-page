@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma"
 import { PublicServiceList } from "@/components/public/service-list"
 import { PublicIncidentList } from "@/components/public/incident-list"
 
+export const dynamic = 'force-dynamic'
+
 interface StatusPageProps {
   params: {
     slug: string
@@ -54,16 +56,20 @@ export default async function StatusPage({ params }: StatusPageProps) {
   const incidents = organization.incidents as any[]
   const sortedIncidents = [...incidents].map(incident => ({
     ...incident,
-    createdAt: incident.createdAt.toISOString(),
-    updatedAt: incident.updatedAt.toISOString(),
-    startedAt: incident.startedAt.toISOString(),
-    resolvedAt: incident.resolvedAt?.toISOString() || null,
+    createdAt: incident.createdAt ? new Date(incident.createdAt).toISOString() : null,
+    updatedAt: incident.updatedAt ? new Date(incident.updatedAt).toISOString() : null,
+    startedAt: incident.startedAt ? new Date(incident.startedAt).toISOString() : null,
+    resolvedAt: incident.resolvedAt ? new Date(incident.resolvedAt).toISOString() : null,
     updates: incident.updates?.map(update => ({
       ...update,
-      createdAt: typeof update.createdAt === 'string' ? update.createdAt : update.createdAt.toISOString()
-    }))
+      createdAt: update.createdAt ? new Date(update.createdAt).toISOString() : null
+    })) || []
   })).sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    (a, b) => {
+      const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0
+      const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0
+      return dateB - dateA
+    }
   )
 
   return (

@@ -42,6 +42,5 @@ next-env.d.ts
 .vscode/
 
 # Prisma
-/prisma/migrations/
 *.db
 *.db-journal
