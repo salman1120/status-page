@@ -2,15 +2,23 @@
 
 A modern, real-time status page application built with Next.js 14, React, and Prisma. Monitor your services, track incidents, and keep your users informed about system status.
 
+🌐 **Live Demo**: [https://status-page2.vercel.app/](https://status-page2.vercel.app/)
+
+📺 **Demo Video**: [Watch Demo on YouTube](https://youtu.be/demo-video)
+
+![Status Page Demo](https://raw.githubusercontent.com/yourusername/status-page/main/public/demo.png)
+
 ## Features
 
 - 🔄 Real-time service status updates
 - 📊 Service metrics tracking (uptime & latency)
-- 📧 Email notifications for status changes
+- 🚨 Incident management with status updates
 - 📈 Beautiful metric visualizations
 - 🔐 Secure authentication with Clerk
 - 🌐 Public status page for each organization
 - 📱 Responsive design for all devices
+- 🔔 Real-time notifications with Pusher
+- 📧 Email notifications via Resend
 
 ## Tech Stack
 
@@ -32,25 +40,36 @@ A modern, real-time status page application built with Next.js 14, React, and Pr
    npm install
    ```
 
-3. Set up environment variables:
+3. Set up environment variables in `.env`:
    ```env
-   DATABASE_URL=
-   NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=
-   CLERK_SECRET_KEY=
-   NEXT_PUBLIC_CLERK_SIGN_IN_URL=
-   NEXT_PUBLIC_CLERK_SIGN_UP_URL=
-   NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL=
-   NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL=
-   PUSHER_APP_ID=
-   NEXT_PUBLIC_PUSHER_KEY=
-   PUSHER_SECRET=
-   RESEND_API_KEY=
+   # Database
+   DATABASE_URL="postgresql://user:password@localhost:5432/statuspage"
+
+   # Clerk Authentication
+   NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_****
+   CLERK_SECRET_KEY=****
+   NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
+   NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
+   NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL=/dashboard
+   NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL=/dashboard
+
+   # Pusher Real-time
+   PUSHER_APP_ID=****
+   NEXT_PUBLIC_PUSHER_KEY=****
+   PUSHER_SECRET=****
+   NEXT_PUBLIC_PUSHER_CLUSTER=****
+
+   # Resend Email
+   RESEND_API_KEY=re_****
    ```
 
 4. Initialize the database:
    ```bash
+   # Generate Prisma Client
    npx prisma generate
-   npx prisma db push
+
+   # Run migrations
+   npx prisma migrate deploy
    ```
 
 5. Run the development server:
@@ -58,84 +77,95 @@ A modern, real-time status page application built with Next.js 14, React, and Pr
    npm run dev
    ```
 
-## Deployment on Replit
+## Deployment on Vercel
 
-1. Create a new Repl:
-   - Go to [Replit](https://replit.com)
-   - Click "Create Repl"
-   - Choose "Import from GitHub"
-   - Paste your repository URL
+1. Push your code to GitHub
 
-2. Configure Environment Variables:
-   - Click on "Tools" in the left sidebar
-   - Select "Secrets"
-   - Add all the required environment variables:
-     ```
-     DATABASE_URL=
-     NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=
-     CLERK_SECRET_KEY=
-     NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
-     NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
-     NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL=/dashboard
-     NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL=/dashboard
-     PUSHER_APP_ID=
-     NEXT_PUBLIC_PUSHER_KEY=
-     PUSHER_SECRET=
-     RESEND_API_KEY=
-     ```
+2. Create a new project on Vercel:
+   - Connect your GitHub repository
+   - Vercel will automatically detect Next.js settings
 
-3. Database Setup:
-   - Replit provides a built-in PostgreSQL database
-   - The connection URL will be automatically added to your environment variables
-   - Run database migrations:
-     ```bash
-     npx prisma generate
-     npx prisma db push
-     ```
+3. Configure Environment Variables:
+   - Add all the environment variables from `.env` to your Vercel project settings
+   - Ensure the `DATABASE_URL` points to your production database
 
-4. Start the Application:
-   - Click the "Run" button
-   - Your app will be available at your Repl URL
+4. Deploy Settings:
+   - Build Command: `npm run build` (includes Prisma generate and migrations)
+   - Output Directory: `.next`
+   - Install Command: `npm install`
 
-## Monitoring on Replit
-
-- View logs in the "Console" tab
-- Monitor database in the "Tools > Database" section
-- Check application performance in "Tools > Performance"
+5. Deploy:
+   - Vercel will automatically deploy your application
+   - Migrations will run during the build process
 
 ## Project Structure
 
 ```
 status-page/
-├── app/                    # Next.js app directory
+├── app/                    # Next.js 14 app directory
 │   ├── api/               # API routes
 │   ├── dashboard/         # Dashboard pages
-│   └── [orgSlug]/        # Public status pages
+│   └── status/           # Public status pages
 ├── components/            # React components
-│   ├── incidents/        # Incident-related components
-│   ├── metrics/         # Metric visualization components
-│   └── ui/              # Reusable UI components
-├── lib/                   # Utility functions and configurations
+├── lib/                   # Utility functions
 ├── prisma/               # Database schema and migrations
-└── types/                # TypeScript type definitions
+└── public/               # Static assets
 ```
 
-## API Routes
+## Key Features Implementation
 
-- `POST /api/services`: Create a new service
-- `PATCH /api/services/[id]`: Update service status
-- `POST /api/incidents`: Create an incident
-- `PATCH /api/incidents/[id]`: Update incident status
-- `GET /api/public/[orgSlug]/status`: Get public status page data
-- `POST /api/cron/collect-metrics`: Collect service metrics
+### Service Monitoring
+- Automatic health checks via cron API route
+- Uptime and latency tracking
+- Historical metrics with Chart.js visualizations
+
+### Incident Management
+- Create and update incidents
+- Real-time status updates
+- Automatic service status sync
+- Public incident timeline
+
+### Real-time Updates
+- Pusher integration for live updates
+- Automatic UI updates on status changes
+- Real-time metric updates
+
+### Organization Management
+- Multi-organization support
+- Team member management
+- Custom branding options
+- Public status page per organization
+
+## Environment Variables Guide
+
+### Required Variables
+- `DATABASE_URL`: PostgreSQL connection string
+- `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`: Clerk public key
+- `CLERK_SECRET_KEY`: Clerk secret key
+- `PUSHER_APP_ID`: Pusher app ID
+- `NEXT_PUBLIC_PUSHER_KEY`: Pusher public key
+- `PUSHER_SECRET`: Pusher secret
+- `RESEND_API_KEY`: Resend API key for emails
+
+### Optional Variables
+- `NEXT_PUBLIC_PUSHER_CLUSTER`: Pusher cluster (default: 'mt1')
+- Clerk redirect URLs (customizable based on your routes)
+
+## Database Migrations
+
+The project uses Prisma for database management. When deploying:
+1. Migrations run automatically during build (`npm run build`)
+2. Manual migration: `npx prisma migrate deploy`
+3. Reset database: `npx prisma migrate reset`
 
 ## Contributing
 
 1. Fork the repository
-2. Create a new branch
-3. Make your changes
-4. Submit a pull request
+2. Create a feature branch
+3. Commit your changes
+4. Push to the branch
+5. Open a Pull Request
 
 ## License
 
-MIT License
+MIT License - feel free to use this project for your own status page!
