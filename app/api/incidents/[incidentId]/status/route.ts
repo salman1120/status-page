@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma"
 import { pusherServer } from "@/lib/pusher"
 import { IncidentStatus } from "@prisma/client"
 
+
 export const dynamic = 'force-dynamic'
 export const runtime = 'edge'
 
