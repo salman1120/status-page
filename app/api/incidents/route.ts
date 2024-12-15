@@ -2,8 +2,16 @@ import { NextResponse } from "next/server"
 import { auth } from "@clerk/nextjs"
 import { prisma } from "@/lib/prisma"
 import { pusherServer } from "@/lib/pusher"
+import { IncidentStatus } from "@prisma/client"
 
 export const dynamic = 'force-dynamic'
+
+interface CreateIncidentBody {
+  title: string
+  description: string
+  status: IncidentStatus
+  serviceId: string
+}
 
 export async function POST(req: Request) {
   try {
@@ -21,20 +29,44 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Organization not found" }, { status: 404 })
     }
 
-    const body = await req.json()
-    const { title, description, status, serviceId } = body
+    const body = await req.json() as CreateIncidentBody
+
+    // Validate required fields
+    if (!body.title || !body.description || !body.status || !body.serviceId) {
+      return NextResponse.json(
+        { error: "Missing required fields" },
+        { status: 400 }
+      )
+    }
+
+    // Validate status
+    if (!Object.values(IncidentStatus).includes(body.status)) {
+      return NextResponse.json(
+        { error: "Invalid incident status" },
+        { status: 400 }
+      )
+    }
 
     // Create the incident
     const incident = await prisma.incident.create({
       data: {
-        title,
-        description,
-        status,
-        serviceId,
-        organizationId: user.organization.id,
+        title: body.title,
+        description: body.description,
+        status: body.status,
+        service: {
+          connect: {
+            id: body.serviceId
+          }
+        },
+        organization: {
+          connect: {
+            id: user.organization.id
+          }
+        }
       },
       include: {
         organization: true,
+        service: true
       },
     })
 

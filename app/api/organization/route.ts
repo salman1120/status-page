@@ -1,6 +1,17 @@
 import { NextResponse } from "next/server"
 import { auth, currentUser } from "@clerk/nextjs"
-import prisma from "@/lib/prisma"
+import { prisma } from "@/lib/prisma"
+
+export const dynamic = 'force-dynamic'
+
+interface CreateOrganizationBody {
+  name: string
+  slug: string
+}
+
+interface UpdateOrganizationBody {
+  name: string
+}
 
 export async function POST(req: Request) {
   try {
@@ -11,12 +22,18 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const body = await req.json()
-    const { name, slug } = body
+    const body = await req.json() as CreateOrganizationBody
+
+    if (!body.name || !body.slug) {
+      return NextResponse.json(
+        { error: "Name and slug are required" },
+        { status: 400 }
+      )
+    }
 
     // Check if organization with slug already exists
     const existingOrg = await prisma.organization.findUnique({
-      where: { slug }
+      where: { slug: body.slug }
     })
 
     if (existingOrg) {
@@ -29,8 +46,8 @@ export async function POST(req: Request) {
     // Create organization
     const organization = await prisma.organization.create({
       data: {
-        name,
-        slug,
+        name: body.name,
+        slug: body.slug,
         users: {
           create: {
             clerkId: userId,
@@ -39,14 +56,17 @@ export async function POST(req: Request) {
             role: "admin"
           }
         }
+      },
+      include: {
+        users: true
       }
     })
 
     return NextResponse.json(organization)
   } catch (error) {
-    console.error("Error creating organization:", error)
+    console.error("[ORGANIZATION_CREATE]", error)
     return NextResponse.json(
-      { error: "Failed to create organization" },
+      { error: "Internal Server Error" },
       { status: 500 }
     )
   }
@@ -66,13 +86,18 @@ export async function GET() {
             clerkId: userId
           }
         }
+      },
+      include: {
+        users: true,
+        services: true
       }
     })
 
     return NextResponse.json(organization)
   } catch (error) {
+    console.error("[ORGANIZATION_GET]", error)
     return NextResponse.json(
-      { error: "Failed to fetch organization" },
+      { error: "Internal Server Error" },
       { status: 500 }
     )
   }
@@ -95,24 +120,33 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ error: "Organization not found" }, { status: 404 })
     }
 
-    const body = await req.json()
-    const { name } = body
+    const body = await req.json() as UpdateOrganizationBody
 
-    if (!name || typeof name !== "string") {
-      return NextResponse.json({ error: "Invalid name" }, { status: 400 })
+    if (!body.name || typeof body.name !== "string") {
+      return NextResponse.json(
+        { error: "Name is required and must be a string" },
+        { status: 400 }
+      )
     }
 
-    // Update organization
     const organization = await prisma.organization.update({
-      where: { id: user.organization.id },
-      data: { name }
+      where: {
+        id: user.organization.id,
+      },
+      data: {
+        name: body.name,
+      },
+      include: {
+        users: true,
+        services: true
+      }
     })
 
     return NextResponse.json(organization)
   } catch (error) {
-    console.error("Error updating organization:", error)
+    console.error("[ORGANIZATION_UPDATE]", error)
     return NextResponse.json(
-      { error: "Failed to update organization" },
+      { error: "Internal Server Error" },
       { status: 500 }
     )
   }

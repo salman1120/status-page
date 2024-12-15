@@ -6,6 +6,10 @@ import { IncidentStatus } from "@prisma/client"
 
 export const dynamic = 'force-dynamic'
 
+interface UpdateStatusBody {
+  status: IncidentStatus
+}
+
 export async function PATCH(
   req: Request,
   { params }: { params: { incidentId: string } }
@@ -25,12 +29,14 @@ export async function PATCH(
       return NextResponse.json({ error: "Organization not found" }, { status: 404 })
     }
 
-    const body = await req.json()
-    const { status } = body
+    const body = await req.json() as UpdateStatusBody
 
     // Validate the status
-    if (!Object.values(IncidentStatus).includes(status as IncidentStatus)) {
-      return NextResponse.json({ error: "Invalid status" }, { status: 400 })
+    if (!body.status || !Object.values(IncidentStatus).includes(body.status)) {
+      return NextResponse.json(
+        { error: "Invalid incident status" },
+        { status: 400 }
+      )
     }
 
     // First check if the incident exists and belongs to the organization
@@ -51,53 +57,26 @@ export async function PATCH(
         id: params.incidentId,
       },
       data: {
-        status: status as IncidentStatus,
-        resolvedAt: status === IncidentStatus.RESOLVED ? new Date() : null,
-        updates: {
-          create: {
-            message: `Status changed to ${status.toLowerCase()}`,
-          },
-        },
+        status: body.status,
       },
       include: {
-        service: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        updates: {
-          orderBy: {
-            createdAt: "desc",
-          },
-          take: 5, // Only get the latest 5 updates
-          select: {
-            id: true,
-            message: true,
-            createdAt: true,
-          },
-        },
+        organization: true,
+        service: true,
       },
     })
 
-    // Send minimal data through Pusher
-    const pusherData = {
-      id: incident.id,
-      title: incident.title,
-      description: incident.description,
-      status: incident.status,
-      startedAt: incident.startedAt,
-      resolvedAt: incident.resolvedAt,
-      service: incident.service,
-      updates: incident.updates,
-    }
+    // Trigger Pusher event
+    await pusherServer.trigger(
+      `organization-${user.organization.id}`,
+      "incident:update",
+      incident
+    )
 
-    await pusherServer.trigger("incidents", "incident-updated", pusherData)
     return NextResponse.json(incident)
   } catch (error) {
-    console.error("Failed to update incident status:", error)
+    console.error("[INCIDENT_STATUS_UPDATE]", error)
     return NextResponse.json(
-      { error: "Failed to update incident status" },
+      { error: "Internal Server Error" },
       { status: 500 }
     )
   }

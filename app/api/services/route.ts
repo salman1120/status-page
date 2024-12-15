@@ -4,11 +4,19 @@ import { prisma } from "@/lib/prisma"
 import { ServiceStatus } from "@prisma/client"
 import { pusherServer } from "@/lib/pusher"
 
+export const dynamic = 'force-dynamic'
+
+interface CreateServiceBody {
+  name: string
+  description?: string
+  status?: ServiceStatus
+}
+
 export async function GET() {
   try {
     const { userId } = auth()
     if (!userId) {
-      return new NextResponse("Unauthorized", { status: 401 })
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const user = await prisma.user.findUnique({
@@ -29,7 +37,10 @@ export async function GET() {
     return NextResponse.json(user.organization.services)
   } catch (error) {
     console.error("[SERVICES_GET]", error)
-    return new NextResponse("Internal error", { status: 500 })
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    )
   }
 }
 
@@ -37,14 +48,16 @@ export async function POST(req: Request) {
   try {
     const { userId } = auth()
     if (!userId) {
-      return new NextResponse("Unauthorized", { status: 401 })
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const body = await req.json()
-    const { name, description, status } = body
+    const body = await req.json() as CreateServiceBody
 
-    if (!name) {
-      return new NextResponse("Name is required", { status: 400 })
+    if (!body.name || typeof body.name !== 'string') {
+      return NextResponse.json(
+        { error: "Name is required and must be a string" },
+        { status: 400 }
+      )
     }
 
     const user = await prisma.user.findUnique({
@@ -55,24 +68,43 @@ export async function POST(req: Request) {
     })
 
     if (!user?.organization) {
-      return new NextResponse("Organization not found", { status: 404 })
+      return NextResponse.json({ error: "Organization not found" }, { status: 404 })
+    }
+
+    // Validate status if provided
+    if (body.status && !Object.values(ServiceStatus).includes(body.status)) {
+      return NextResponse.json(
+        { error: "Invalid service status" },
+        { status: 400 }
+      )
     }
 
     const service = await prisma.service.create({
       data: {
-        name,
-        description,
-        status: status || ServiceStatus.OPERATIONAL,
-        organizationId: user.organization.id,
+        name: body.name,
+        description: body.description,
+        status: body.status || ServiceStatus.OPERATIONAL,
+        organization: {
+          connect: {
+            id: user.organization.id
+          }
+        }
       },
     })
 
-    // Notify clients about the new service
-    await pusherServer.trigger("services", "service-created", service)
+    // Trigger Pusher event
+    await pusherServer.trigger(
+      `organization-${user.organization.id}`,
+      "service:create",
+      service
+    )
 
     return NextResponse.json(service)
   } catch (error) {
     console.error("[SERVICES_POST]", error)
-    return new NextResponse("Internal error", { status: 500 })
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    )
   }
 }
