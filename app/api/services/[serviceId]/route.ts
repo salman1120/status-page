@@ -1,115 +1,150 @@
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@clerk/nextjs"
 import { prisma } from "@/lib/prisma"
 import { ServiceStatus } from "@prisma/client"
+import { UpdateServiceRequest } from "@/types/api"
+import { pusherServer } from "@/lib/pusher"
 
-export const dynamic = 'force-dynamic'
-
-export async function GET(
-  req: Request,
+/**
+ * PATCH /api/services/[serviceId]
+ * Updates a service's details and status
+ */
+export async function PATCH(
+  req: NextRequest,
   { params }: { params: { serviceId: string } }
 ) {
   try {
     const { userId } = auth()
     if (!userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return NextResponse.json(
+        { success: false, error: "Unauthorized" },
+        { status: 401 }
+      )
     }
 
-    const service = await prisma.service.findUnique({
-      where: { id: params.serviceId },
+    const body: UpdateServiceRequest = await req.json()
+
+    // Validate status if provided
+    if (body.status && !Object.values(ServiceStatus).includes(body.status)) {
+      return NextResponse.json(
+        { success: false, error: "Invalid status" },
+        { status: 400 }
+      )
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { clerkId: userId },
       include: {
-        metrics: {
-          orderBy: { timestamp: "desc" },
-          take: 100,
-        },
-      },
+        organization: {
+          include: {
+            services: {
+              where: {
+                id: params.serviceId
+              }
+            }
+          }
+        }
+      }
     })
 
-    if (!service) {
-      return NextResponse.json({ error: "Service not found" }, { status: 404 })
+    if (!user?.organization) {
+      return NextResponse.json(
+        { success: false, error: "Organization not found" },
+        { status: 404 }
+      )
     }
 
-    return NextResponse.json(service)
+    if (user.organization.services.length === 0) {
+      return NextResponse.json(
+        { success: false, error: "Service not found" },
+        { status: 404 }
+      )
+    }
+
+    const updatedService = await prisma.service.update({
+      where: {
+        id: params.serviceId,
+        organizationId: user.organization.id,
+      },
+      data: body,
+    })
+
+    // Notify clients about the service update
+    await pusherServer.trigger("services", "service-updated", updatedService)
+
+    return NextResponse.json({ success: true, data: updatedService })
   } catch (error) {
-    console.error("[SERVICE_GET]", error)
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
+    console.error("[SERVICE_PATCH]", error)
+    return NextResponse.json(
+      { success: false, error: "Failed to update service" },
+      { status: 500 }
+    )
   }
 }
 
+/**
+ * DELETE /api/services/[serviceId]
+ * Deletes a service and all associated metrics and incidents
+ */
 export async function DELETE(
-  req: Request,
+  req: NextRequest,
   { params }: { params: { serviceId: string } }
 ) {
   try {
     const { userId } = auth()
     if (!userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return NextResponse.json(
+        { success: false, error: "Unauthorized" },
+        { status: 401 }
+      )
     }
 
-    const service = await prisma.service.findUnique({
-      where: { id: params.serviceId },
+    const user = await prisma.user.findUnique({
+      where: { clerkId: userId },
+      include: {
+        organization: {
+          include: {
+            services: {
+              where: {
+                id: params.serviceId
+              }
+            }
+          }
+        }
+      }
     })
 
-    if (!service) {
-      return NextResponse.json({ error: "Service not found" }, { status: 404 })
+    if (!user?.organization) {
+      return NextResponse.json(
+        { success: false, error: "Organization not found" },
+        { status: 404 }
+      )
     }
 
+    if (user.organization.services.length === 0) {
+      return NextResponse.json(
+        { success: false, error: "Service not found" },
+        { status: 404 }
+      )
+    }
+
+    // Delete service (cascade will handle related records)
     await prisma.service.delete({
-      where: { id: params.serviceId },
+      where: {
+        id: params.serviceId,
+        organizationId: user.organization.id,
+      },
     })
+
+    // Notify clients about the service deletion
+    await pusherServer.trigger("services", "service-deleted", params.serviceId)
 
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error("[SERVICE_DELETE]", error)
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
-  }
-}
-
-export async function PATCH(
-  req: Request,
-  { params }: { params: { serviceId: string } }
-) {
-  try {
-    const { userId } = auth()
-    if (!userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    const body = await req.json()
-    const { name, description, status } = body
-
-    if (!name && !description && !status) {
-      return NextResponse.json(
-        { error: "At least one field must be provided" },
-        { status: 400 }
-      )
-    }
-
-    if (status && !Object.values(ServiceStatus).includes(status)) {
-      return NextResponse.json(
-        { error: "Invalid service status" },
-        { status: 400 }
-      )
-    }
-
-    const service = await prisma.service.update({
-      where: { id: params.serviceId },
-      data: {
-        ...(name && { name }),
-        ...(description && { description }),
-        ...(status && { status }),
-      },
-      include: {
-        metrics: {
-          orderBy: { timestamp: "desc" },
-          take: 100,
-        },
-      },
-    })
-
-    return NextResponse.json(service)
-  } catch (error) {
-    console.error("[SERVICE_UPDATE]", error)
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
+    return NextResponse.json(
+      { success: false, error: "Failed to delete service" },
+      { status: 500 }
+    )
   }
 }
