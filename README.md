@@ -4,9 +4,7 @@ A modern, real-time status page application built with Next.js 14, React, and Pr
 
 🌐 **Live Demo**: [https://status-page2.vercel.app/](https://status-page2.vercel.app/)
 
-📺 **Demo Video**: [Watch Demo on YouTube](https://youtu.be/demo-video)
-
-![Status Page Demo](https://raw.githubusercontent.com/yourusername/status-page/main/public/demo.png)
+📺 **Demo Video**: [Watch Demo](https://drive.google.com/file/d/1cWa22CqkSJnF2tYiOT0_70a_QGkEd586/view?usp=sharing)
 
 ## Features
 
