@@ -4,7 +4,6 @@ import { prisma } from "@/lib/prisma"
 import { pusherServer } from "@/lib/pusher"
 
 export const dynamic = 'force-dynamic'
-export const runtime = 'edge'
 
 export async function POST(req: Request) {
   try {
