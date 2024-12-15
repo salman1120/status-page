@@ -1,53 +1,44 @@
 import { NextResponse } from "next/server"
-import prisma from "@/lib/prisma"
+import { prisma } from "@/lib/prisma"
+import { ServiceStatus } from "@prisma/client"
 
-export async function GET(req: Request) {
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+
+function calculateOverallStatus(statuses: ServiceStatus[]): ServiceStatus {
+  if (statuses.includes(ServiceStatus.MAJOR_OUTAGE)) return ServiceStatus.MAJOR_OUTAGE
+  if (statuses.includes(ServiceStatus.PARTIAL_OUTAGE)) return ServiceStatus.PARTIAL_OUTAGE
+  if (statuses.includes(ServiceStatus.DEGRADED_PERFORMANCE)) return ServiceStatus.DEGRADED_PERFORMANCE
+  return ServiceStatus.OPERATIONAL
+}
+
+export async function GET() {
   try {
-    const { searchParams } = new URL(req.url)
-    const apiKey = searchParams.get("api_key")
-    
-    if (!apiKey || apiKey !== process.env.STATUS_API_KEY) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const services = await prisma.service.findMany({
+      include: {
+        metrics: {
+          orderBy: { timestamp: "desc" },
+          take: 1,
+        },
+      },
+    })
+
+    const statuses = services.map((service) => service.status)
+    const overallStatus = calculateOverallStatus(statuses)
+
+    const response = {
+      status: overallStatus,
+      updated: new Date().toISOString(),
+      services: services.map((service) => ({
+        name: service.name,
+        status: service.status,
+        metrics: service.metrics[0] || null,
+      })),
     }
 
-    const services = await prisma.service.findMany({
-      select: {
-        id: true,
-        name: true,
-        status: true,
-        updatedAt: true,
-      },
-    })
-
-    const incidents = await prisma.incident.findMany({
-      where: {
-        status: {
-          not: "RESOLVED"
-        }
-      },
-      select: {
-        id: true,
-        title: true,
-        status: true,
-        serviceId: true,
-        startedAt: true,
-      },
-      orderBy: {
-        startedAt: "desc"
-      },
-      take: 5
-    })
-
-    return NextResponse.json({
-      status: "ok",
-      timestamp: new Date().toISOString(),
-      services,
-      active_incidents: incidents,
-    })
+    return NextResponse.json(response)
   } catch (error) {
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    )
+    console.error("[STATUS_V1]", error)
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
   }
 }

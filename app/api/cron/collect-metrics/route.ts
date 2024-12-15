@@ -2,71 +2,73 @@ import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { ServiceStatus } from "@prisma/client"
 
+export const dynamic = 'force-dynamic'
+
 /**
  * Simulates checking a service's health by generating random metrics
  * In production, this should be replaced with actual health checks
  */
-async function checkServiceHealth(serviceId: string): Promise<{
-  status: ServiceStatus
-  latency: number
-  uptime: number
-}> {
-  // Simulate service check with random values
-  const latency = Math.random() * 1000 // 0-1000ms
-  const uptime = 90 + Math.random() * 10 // 90-100%
-  
-  // Determine status based on metrics
-  let status: ServiceStatus = ServiceStatus.OPERATIONAL
-  if (latency > 800) status = ServiceStatus.DEGRADED_PERFORMANCE
-  if (latency > 900) status = ServiceStatus.PARTIAL_OUTAGE
-  if (uptime < 92) status = ServiceStatus.MAJOR_OUTAGE
-
-  return { status, latency, uptime }
+async function checkServiceHealth(url: string): Promise<{ status: ServiceStatus; latency: number }> {
+  const start = Date.now()
+  try {
+    const response = await fetch(url, { method: 'HEAD' })
+    const latency = Date.now() - start
+    return {
+      status: response.ok ? ServiceStatus.OPERATIONAL : ServiceStatus.MAJOR_OUTAGE,
+      latency
+    }
+  } catch (error) {
+    return {
+      status: ServiceStatus.MAJOR_OUTAGE,
+      latency: Date.now() - start
+    }
+  }
 }
 
 /**
- * POST /api/cron/collect-metrics
+ * GET /api/cron/collect-metrics
  * Collects metrics for all services and updates their status
  * This endpoint should be called by a cron job every minute
  */
-export async function POST() {
+export async function GET() {
   try {
     // Get all services
-    const services = await prisma.service.findMany()
-    
+    const services = await prisma.service.findMany({
+      where: {
+        monitoringEnabled: true
+      }
+    })
+
     // Check each service and create metrics
-    const metrics = await Promise.all(
+    const results = await Promise.all(
       services.map(async (service) => {
-        const health = await checkServiceHealth(service.id)
-        
+        if (!service.url) return null
+
+        const { status, latency } = await checkServiceHealth(service.url)
+
         // Create metric record
         const metric = await prisma.serviceMetric.create({
           data: {
             serviceId: service.id,
-            status: health.status,
-            latency: health.latency,
-            uptime: health.uptime
+            status,
+            latency,
+            uptime: status === ServiceStatus.OPERATIONAL ? 100 : 0
           }
         })
-        
+
         // Update service status if changed
-        if (service.status !== health.status) {
-          await prisma.service.update({
-            where: { id: service.id },
-            data: { status: health.status }
-          })
-        }
-        
+        await prisma.service.update({
+          where: { id: service.id },
+          data: { status }
+        })
+
         return metric
       })
     )
-    
-    return NextResponse.json({ success: true })
+
+    return NextResponse.json({ success: true, metrics: results.filter(Boolean) })
   } catch (error) {
-    console.error("Error collecting metrics:", error)
-    return NextResponse.json(
-      { success: false, error: "Failed to collect metrics" },
-      { status: 500 }
-    )
+    console.error("[COLLECT_METRICS]", error)
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
   }
 }
