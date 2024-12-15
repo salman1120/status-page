@@ -128,12 +128,38 @@ export async function DELETE(
       )
     }
 
-    // Delete service (cascade will handle related records)
-    await prisma.service.delete({
-      where: {
-        id: params.serviceId,
-        organizationId: user.organization.id,
-      },
+    // Delete in transaction to ensure all related records are deleted
+    await prisma.$transaction(async (tx) => {
+      // First delete all incident updates for incidents related to this service
+      await tx.incidentUpdate.deleteMany({
+        where: {
+          incident: {
+            serviceId: params.serviceId
+          }
+        }
+      })
+
+      // Then delete all incidents related to this service
+      await tx.incident.deleteMany({
+        where: {
+          serviceId: params.serviceId
+        }
+      })
+
+      // Delete all service metrics
+      await tx.serviceMetric.deleteMany({
+        where: {
+          serviceId: params.serviceId
+        }
+      })
+
+      // Finally delete the service
+      await tx.service.delete({
+        where: {
+          id: params.serviceId,
+          organizationId: user.organization.id
+        }
+      })
     })
 
     // Notify clients about the service deletion
