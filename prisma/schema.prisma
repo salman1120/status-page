@@ -48,6 +48,7 @@ model User {
   organizationId String                           // Foreign key to organization
   createdAt      DateTime     @default(now())     // Account creation date
   incidents      Incident[]                       // Incidents created by user
+  updates        IncidentUpdate[]                // Updates created by user
 }
 
 // Service model represents a monitored service or component
@@ -99,4 +100,6 @@ model IncidentUpdate {
   incidentId  String
   message     String                           // Update message
   createdAt   DateTime  @default(now())        // When update was posted
+  createdBy   User?     @relation(fields: [createdById], references: [id])
+  createdById String?
 }

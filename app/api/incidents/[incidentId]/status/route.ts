@@ -43,55 +43,65 @@ export async function PATCH(
       return NextResponse.json({ error: "Incident not found" }, { status: 404 })
     }
 
-    // Update the incident
-    const incident = await prisma.incident.update({
-      where: {
-        id: params.incidentId,
-      },
-      data: {
-        status: status as IncidentStatus,
-        resolvedAt: status === IncidentStatus.RESOLVED ? new Date() : null,
-        updates: {
-          create: {
-            message: `Status changed to ${status.toLowerCase()}`,
+    // Update the incident and create update in a transaction
+    const updatedIncident = await prisma.$transaction(async (tx) => {
+      // Update incident status
+      const incident = await tx.incident.update({
+        where: {
+          id: params.incidentId,
+        },
+        data: {
+          status: status as IncidentStatus,
+          resolvedAt: status === IncidentStatus.RESOLVED ? new Date() : null,
+        },
+      })
+
+      // Create the status update
+      await tx.incidentUpdate.create({
+        data: {
+          message: `Status changed to ${status.toLowerCase()}`,
+          incidentId: params.incidentId,
+        },
+      })
+
+      return tx.incident.findUnique({
+        where: { id: params.incidentId },
+        include: {
+          service: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          updates: {
+            orderBy: {
+              createdAt: "desc",
+            },
+            take: 5,
+            select: {
+              id: true,
+              message: true,
+              createdAt: true,
+            },
           },
         },
-      },
-      include: {
-        service: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        updates: {
-          orderBy: {
-            createdAt: "desc",
-          },
-          take: 5, // Only get the latest 5 updates
-          select: {
-            id: true,
-            message: true,
-            createdAt: true,
-          },
-        },
-      },
+      })
     })
 
     // Send minimal data through Pusher
     const pusherData = {
-      id: incident.id,
-      title: incident.title,
-      description: incident.description,
-      status: incident.status,
-      startedAt: incident.startedAt,
-      resolvedAt: incident.resolvedAt,
-      service: incident.service,
-      updates: incident.updates,
+      id: updatedIncident.id,
+      title: updatedIncident.title,
+      description: updatedIncident.description,
+      status: updatedIncident.status,
+      startedAt: updatedIncident.startedAt,
+      resolvedAt: updatedIncident.resolvedAt,
+      service: updatedIncident.service,
+      updates: updatedIncident.updates,
     }
 
     await pusherServer.trigger("incidents", "incident-updated", pusherData)
-    return NextResponse.json(incident)
+    return NextResponse.json(updatedIncident)
   } catch (error) {
     console.error("Failed to update incident status:", error)
     return NextResponse.json(
