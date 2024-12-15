@@ -5,7 +5,6 @@ import { Separator } from "@/components/ui/separator"
 import { auth } from "@clerk/nextjs"
 import { redirect } from "next/navigation"
 import { prisma } from "@/lib/prisma"
-import { ExtendedIncident } from "@/types"
 
 export default async function IncidentsPage() {
   const { userId } = auth()
@@ -22,8 +21,7 @@ export default async function IncidentsPage() {
           services: true,
           incidents: {
             include: {
-              service: true,
-              updates: true
+              service: true
             }
           }
         }
@@ -36,9 +34,8 @@ export default async function IncidentsPage() {
   }
 
   // Sort incidents by creation time
-  const incidents = user.organization.incidents as unknown as ExtendedIncident[]
-  const sortedIncidents = [...incidents].sort(
-    (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
+  const sortedIncidents = [...user.organization.incidents].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   )
 
   return (

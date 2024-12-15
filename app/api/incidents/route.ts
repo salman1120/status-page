@@ -1,10 +1,7 @@
 import { NextResponse } from "next/server"
 import { auth } from "@clerk/nextjs"
 import { prisma } from "@/lib/prisma"
-import { IncidentStatus } from "@prisma/client"
-
-export const dynamic = 'force-dynamic'
-export const runtime = 'nodejs'
+import { pusherServer } from "@/lib/pusher"
 
 export async function GET() {
   try {
@@ -15,34 +12,31 @@ export async function GET() {
 
     const user = await prisma.user.findUnique({
       where: { clerkId: userId },
-      include: { organization: true }
+      include: {
+        organization: {
+          include: {
+            incidents: {
+              include: {
+                service: true,
+                updates: {
+                  orderBy: { createdAt: "desc" },
+                },
+              },
+              orderBy: { startedAt: "desc" },
+            },
+          },
+        },
+      },
     })
 
     if (!user?.organization) {
-      return NextResponse.json([])
+      return NextResponse.json({ error: "Organization not found" }, { status: 404 })
     }
 
-    const incidents = await prisma.incident.findMany({
-      where: {
-        organizationId: user.organization.id
-      },
-      include: {
-        service: true,
-        updates: {
-          orderBy: {
-            createdAt: 'desc'
-          }
-        }
-      },
-      orderBy: {
-        createdAt: 'desc'
-      }
-    })
-
-    return NextResponse.json(incidents)
+    return NextResponse.json(user.organization.incidents)
   } catch (error) {
-    console.error("[INCIDENTS_GET]", error)
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
+    console.error("Failed to fetch incidents:", error)
+    return NextResponse.json({ error: "Failed to fetch incidents" }, { status: 500 })
   }
 }
 
@@ -55,7 +49,7 @@ export async function POST(req: Request) {
 
     const user = await prisma.user.findUnique({
       where: { clerkId: userId },
-      include: { organization: true }
+      include: { organization: true },
     })
 
     if (!user?.organization) {
@@ -63,58 +57,25 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json()
-    const { title, description, serviceId, status = IncidentStatus.INVESTIGATING } = body
-
-    if (!title || !serviceId) {
-      return NextResponse.json(
-        { error: "Title and serviceId are required" },
-        { status: 400 }
-      )
-    }
-
-    // Verify service belongs to organization
-    const service = await prisma.service.findFirst({
-      where: {
-        id: serviceId,
-        organizationId: user.organization.id
-      }
-    })
-
-    if (!service) {
-      return NextResponse.json({ error: "Service not found" }, { status: 404 })
-    }
-
     const incident = await prisma.incident.create({
       data: {
-        title,
-        description,
-        status,
-        organization: {
-          connect: { id: user.organization.id }
-        },
-        service: {
-          connect: { id: serviceId }
-        },
-        updates: {
-          create: {
-            message: description || "Incident created",
-            status
-          }
-        }
+        title: body.title,
+        description: body.description,
+        serviceId: body.serviceId,
+        organizationId: user.organization.id,
+        createdById: user.id,
+        status: "INVESTIGATING",
       },
       include: {
         service: true,
-        updates: {
-          orderBy: {
-            createdAt: 'desc'
-          }
-        }
-      }
+        updates: true,
+      },
     })
 
+    await pusherServer.trigger("incidents", "incident-created", incident)
     return NextResponse.json(incident)
   } catch (error) {
-    console.error("[INCIDENTS_POST]", error)
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
+    console.error("Failed to create incident:", error)
+    return NextResponse.json({ error: "Failed to create incident" }, { status: 500 })
   }
 }
