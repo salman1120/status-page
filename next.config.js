@@ -38,22 +38,11 @@ const nextConfig = {
     ]
   },
   // Configure for Replit environment
-  webpack: (config, { isServer }) => {
+  webpack: (config) => {
     config.resolve.alias = {
       ...config.resolve.alias,
       '@': path.resolve(__dirname),
     }
-
-    if (!isServer) {
-      config.resolve.fallback = {
-        ...config.resolve.fallback,
-        crypto: require.resolve('crypto-browserify'),
-        stream: require.resolve('stream-browserify'),
-        util: require.resolve('util/'),
-        fs: false,
-      }
-    }
-
     return config
   },
 }
