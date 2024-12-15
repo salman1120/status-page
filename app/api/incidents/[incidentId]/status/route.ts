@@ -4,6 +4,9 @@ import { prisma } from "@/lib/prisma"
 import { pusherServer } from "@/lib/pusher"
 import { IncidentStatus } from "@prisma/client"
 
+export const dynamic = 'force-dynamic'
+export const runtime = 'edge'
+
 export async function PATCH(
   req: Request,
   { params }: { params: { incidentId: string } }
@@ -99,4 +102,9 @@ export async function PATCH(
       { status: 500 }
     )
   }
+}
+
+// Add GET method to handle static generation
+export async function GET() {
+  return NextResponse.json({ message: "Method not allowed" }, { status: 405 })
 }

@@ -2,9 +2,9 @@
 
 import { useOrganization, OrganizationProfile } from "@clerk/nextjs"
 import { redirect } from "next/navigation"
-import { Heading } from "@/components/ui/heading"
-import { Separator } from "@/components/ui/separator"
-import { Card, CardContent } from "@/components/ui/card"
+import { Heading } from "../../../../components/ui/heading"
+import { Separator } from "../../../../components/ui/separator"
+import { Card, CardContent } from "../../../../components/ui/card"
 import { Loader2 } from "lucide-react"
 
 export default function TeamSettingsPage() {
