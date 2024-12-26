@@ -22,6 +22,10 @@ const statusConfig = {
     label: "Major Outage",
     color: "bg-red-500/10 text-red-500 border-red-500/20",
   },
+  [ServiceStatus.UNDER_MAINTENANCE]: {
+    label: "Under Maintenance",
+    color: "bg-blue-500/10 text-blue-500 border-blue-500/20",
+  },
 }
 
 interface PublicServiceListProps {

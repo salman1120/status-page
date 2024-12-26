@@ -2,7 +2,7 @@ import { authMiddleware, redirectToSignIn } from "@clerk/nextjs"
 import { NextResponse } from "next/server"
 
 // List of routes that don't require authentication
-const publicRoutes = ["/", "/sign-in", "/sign-up"]
+const publicRoutes = ["/", "/sign-in", "/sign-up", "/status/:slug*"]
 
 // List of routes that require authentication but don't require an organization
 const authRoutes = ["/organizations", "/setup"]
@@ -10,7 +10,8 @@ const authRoutes = ["/organizations", "/setup"]
 export default authMiddleware({
   publicRoutes: publicRoutes,
   afterAuth(auth, req) {
-    const isPublic = publicRoutes.includes(req.nextUrl.pathname)
+    const isPublic = publicRoutes.includes(req.nextUrl.pathname) || 
+                    req.nextUrl.pathname.startsWith("/status/")
     const isAuthRoute = authRoutes.includes(req.nextUrl.pathname)
     const isApiRoute = req.nextUrl.pathname.startsWith("/api")
 

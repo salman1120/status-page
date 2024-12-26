@@ -16,6 +16,7 @@ export function OrganizationForm({ initialServices }: OrganizationFormProps) {
   const router = useRouter()
   const { organization } = useOrganization()
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState("")
 
   const [formData, setFormData] = useState({
     name: organization?.name || "",
@@ -23,6 +24,20 @@ export function OrganizationForm({ initialServices }: OrganizationFormProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setError("")
+
+    // Client-side validation
+    const trimmedName = formData.name.trim()
+    if (!trimmedName) {
+      setError("Organization name cannot be empty")
+      return
+    }
+
+    if (trimmedName === organization?.name) {
+      setError("Please make changes before saving")
+      return
+    }
+
     setLoading(true)
 
     try {
@@ -32,7 +47,7 @@ export function OrganizationForm({ initialServices }: OrganizationFormProps) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          name: formData.name.trim(),
+          name: trimmedName,
         }),
       })
 
@@ -69,9 +84,20 @@ export function OrganizationForm({ initialServices }: OrganizationFormProps) {
               <Input
                 id="name"
                 value={formData.name}
-                onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                onChange={(e) => {
+                  setError("")
+                  setFormData(prev => ({ ...prev, name: e.target.value }))
+                }}
                 disabled={loading}
+                required
+                minLength={1}
+                className={error ? "border-red-500" : ""}
               />
+              {error && (
+                <p className="mt-1 text-sm text-red-500">
+                  {error}
+                </p>
+              )}
             </div>
             <div>
               <label htmlFor="slug" className="text-sm font-medium">
