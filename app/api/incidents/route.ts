@@ -57,10 +57,40 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json()
+
+    // Validate title field
+    if (!body.title || typeof body.title !== 'string' || body.title.trim() === '') {
+      return NextResponse.json(
+        { error: "Title is required and cannot be empty" },
+        { status: 400 }
+      )
+    }
+
+    // Check for duplicate title for active incidents
+    const existingIncident = await prisma.incident.findFirst({
+      where: {
+        organizationId: user.organization.id,
+        title: {
+          equals: body.title.trim(),
+          mode: 'insensitive'
+        },
+        status: {
+          not: 'RESOLVED'
+        }
+      }
+    })
+
+    if (existingIncident) {
+      return NextResponse.json(
+        { error: "An active incident with this title already exists" },
+        { status: 400 }
+      )
+    }
+
     const incident = await prisma.incident.create({
       data: {
-        title: body.title,
-        description: body.description,
+        title: body.title.trim(),
+        description: body.description?.trim() || '',
         serviceId: body.serviceId,
         organizationId: user.organization.id,
         createdById: user.id,

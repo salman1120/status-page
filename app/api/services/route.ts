@@ -53,9 +53,10 @@ export async function POST(req: Request) {
 
     const body = await req.json() as CreateServiceBody
 
-    if (!body.name || typeof body.name !== 'string') {
+    // Validate name field
+    if (!body.name || typeof body.name !== 'string' || body.name.trim() === '') {
       return NextResponse.json(
-        { error: "Name is required and must be a string" },
+        { error: "Name is required and cannot be empty" },
         { status: 400 }
       )
     }
@@ -63,12 +64,27 @@ export async function POST(req: Request) {
     const user = await prisma.user.findUnique({
       where: { clerkId: userId },
       include: {
-        organization: true,
+        organization: {
+          include: {
+            services: true
+          }
+        },
       },
     })
 
     if (!user?.organization) {
       return NextResponse.json({ error: "Organization not found" }, { status: 404 })
+    }
+
+    // Check for duplicate service name
+    const existingService = user.organization.services.find(
+      service => service.name.toLowerCase() === body.name.trim().toLowerCase()
+    )
+    if (existingService) {
+      return NextResponse.json(
+        { error: "A service with this name already exists" },
+        { status: 400 }
+      )
     }
 
     // Validate status if provided
@@ -81,8 +97,8 @@ export async function POST(req: Request) {
 
     const service = await prisma.service.create({
       data: {
-        name: body.name,
-        description: body.description,
+        name: body.name.trim(),
+        description: body.description?.trim() || '',
         status: body.status || ServiceStatus.OPERATIONAL,
         organization: {
           connect: {

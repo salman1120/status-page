@@ -66,7 +66,7 @@ export default async function Dashboard() {
           <p className="text-muted-foreground mt-1">Manage your services and monitor system status</p>
         </div>
         <Button asChild>
-          <Link href="/dashboard/services/new">
+          <Link href="/dashboard/services?open=true">
             Add New Service
           </Link>
         </Button>
