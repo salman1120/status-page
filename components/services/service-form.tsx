@@ -63,6 +63,15 @@ export function ServiceForm() {
     event.preventDefault()
     setLoading(true)
     setBackendError("")
+    setNameError("")
+
+    // Client-side validation
+    const trimmedName = formData.name.trim()
+    if (!trimmedName) {
+      setNameError("Service name is required")
+      setLoading(false)
+      return
+    }
 
     try {
       const response = await fetch("/api/services", {
@@ -71,15 +80,21 @@ export function ServiceForm() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          name: formData.name.trim(),
+          name: trimmedName,
           description: formData.description.trim(),
           status: formData.status,
         }),
       })
 
+      const data = await response.json()
       if (!response.ok) {
-        const data = await response.json()
-        throw new Error(data.error || "Failed to create service")
+        if (response.status === 400 && data.error.includes("already exists")) {
+          setNameError(data.error)
+        } else {
+          throw new Error(data.error || "Failed to create service")
+        }
+        setLoading(false)
+        return
       }
 
       // Reset form
@@ -111,7 +126,7 @@ export function ServiceForm() {
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Add New Service</DialogTitle>
+          <DialogTitle>Create New Service</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -121,12 +136,15 @@ export function ServiceForm() {
             <Input
               id="name"
               value={formData.name}
-              onChange={(e) => handleChange("name", e.target.value)}
+              onChange={(e) => handleChange('name', e.target.value)}
               disabled={loading}
+              required
               className={nameError ? "border-red-500" : ""}
             />
             {nameError && (
-              <p className="mt-1 text-xs text-red-500">{nameError}</p>
+              <p className="mt-1 text-sm text-red-500">
+                {nameError}
+              </p>
             )}
           </div>
           <div>

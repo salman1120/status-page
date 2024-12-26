@@ -63,6 +63,24 @@ export async function POST(req: Request) {
       )
     }
 
+    // Check for existing service with same name in the organization
+    const existingService = await prisma.service.findFirst({
+      where: {
+        organizationId: orgId,
+        name: {
+          equals: name.trim(),
+          mode: 'insensitive', // Case-insensitive comparison
+        },
+      },
+    })
+
+    if (existingService) {
+      return NextResponse.json(
+        { error: "A service with this name already exists" },
+        { status: 400 }
+      )
+    }
+
     // Create service
     const service = await prisma.service.create({
       data: {
