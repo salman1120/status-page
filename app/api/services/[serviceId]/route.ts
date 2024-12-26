@@ -14,8 +14,8 @@ export async function PATCH(
   { params }: { params: { serviceId: string } }
 ) {
   try {
-    const { userId } = auth()
-    if (!userId) {
+    const { userId, orgId } = auth()
+    if (!userId || !orgId) {
       return NextResponse.json(
         { success: false, error: "Unauthorized" },
         { status: 401 }
@@ -32,45 +32,35 @@ export async function PATCH(
       )
     }
 
-    const user = await prisma.user.findUnique({
-      where: { clerkId: userId },
-      include: {
-        organization: {
-          include: {
-            services: {
-              where: {
-                id: params.serviceId
-              }
-            }
-          }
-        }
-      }
+    // Verify service exists and belongs to organization
+    const service = await prisma.service.findUnique({
+      where: {
+        id: params.serviceId,
+        organizationId: orgId,
+      },
     })
 
-    if (!user?.organization) {
-      return NextResponse.json(
-        { success: false, error: "Organization not found" },
-        { status: 404 }
-      )
-    }
-
-    if (user.organization.services.length === 0) {
+    if (!service) {
       return NextResponse.json(
         { success: false, error: "Service not found" },
         { status: 404 }
       )
     }
 
+    // Update service
     const updatedService = await prisma.service.update({
       where: {
         id: params.serviceId,
-        organizationId: user.organization.id,
       },
-      data: body,
+      data: {
+        name: body.name,
+        description: body.description,
+        status: body.status,
+      },
     })
 
     // Notify clients about the service update
-    await pusherServer.trigger("services", "service-updated", updatedService)
+    await pusherServer.trigger(orgId, "service:updated", updatedService)
 
     return NextResponse.json({ success: true, data: updatedService })
   } catch (error) {
@@ -91,79 +81,66 @@ export async function DELETE(
   { params }: { params: { serviceId: string } }
 ) {
   try {
-    const { userId } = auth()
-    if (!userId) {
+    const { userId, orgId } = auth()
+    console.log('[API] Auth check - userId:', userId, 'orgId:', orgId)
+    
+    if (!userId || !orgId) {
       return NextResponse.json(
         { success: false, error: "Unauthorized" },
         { status: 401 }
       )
     }
 
-    const user = await prisma.user.findUnique({
-      where: { clerkId: userId },
-      include: {
-        organization: {
-          include: {
-            services: {
-              where: {
-                id: params.serviceId
-              }
-            }
-          }
-        }
-      }
+    // Verify service exists and belongs to organization
+    const service = await prisma.service.findUnique({
+      where: {
+        id: params.serviceId,
+        organizationId: orgId,
+      },
     })
 
-    if (!user?.organization) {
-      return NextResponse.json(
-        { success: false, error: "Organization not found" },
-        { status: 404 }
-      )
-    }
-
-    if (user.organization.services.length === 0) {
+    if (!service) {
       return NextResponse.json(
         { success: false, error: "Service not found" },
         { status: 404 }
       )
     }
 
-    // Delete in transaction to ensure all related records are deleted
+    // Delete all related data in a transaction
     await prisma.$transaction(async (tx) => {
-      // First delete all incident updates for incidents related to this service
+      // Delete incident updates first
       await tx.incidentUpdate.deleteMany({
         where: {
           incident: {
-            serviceId: params.serviceId
-          }
-        }
+            serviceId: params.serviceId,
+          },
+        },
       })
 
-      // Then delete all incidents related to this service
+      // Delete incidents
       await tx.incident.deleteMany({
         where: {
-          serviceId: params.serviceId
-        }
+          serviceId: params.serviceId,
+        },
       })
 
-      // Delete all service metrics
+      // Delete service metrics
       await tx.serviceMetric.deleteMany({
         where: {
-          serviceId: params.serviceId
-        }
+          serviceId: params.serviceId,
+        },
       })
 
       // Finally delete the service
       await tx.service.delete({
         where: {
           id: params.serviceId,
-          organizationId: user.organization.id
-        }
+        },
       })
     })
 
     // Notify clients about the service deletion
-    await pusherServer.trigger("services", "service-deleted", params.serviceId)
+    await pusherServer.trigger(orgId, "service:deleted", params.serviceId)
 
     return NextResponse.json({ success: true })
   } catch (error) {

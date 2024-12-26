@@ -1,7 +1,7 @@
 import { Badge } from "@/components/ui/badge"
 import { ServiceStatus } from "@prisma/client"
 
-const statusConfig = {
+const statusConfig: Record<ServiceStatus, { label: string; className: string }> = {
   OPERATIONAL: {
     label: "Operational",
     className: "bg-green-500/10 text-green-500 hover:bg-green-500/20"
@@ -17,6 +17,10 @@ const statusConfig = {
   MAJOR_OUTAGE: {
     label: "Major Outage",
     className: "bg-red-500/10 text-red-500 hover:bg-red-500/20"
+  },
+  UNDER_MAINTENANCE: {
+    label: "Maintenance",
+    className: "bg-blue-500/10 text-blue-500 hover:bg-blue-500/20"
   }
 }
 
@@ -25,7 +29,8 @@ interface StatusBadgeProps {
 }
 
 export function StatusBadge({ status }: StatusBadgeProps) {
-  const config = statusConfig[status]
+  // Default to OPERATIONAL if status is undefined
+  const config = statusConfig[status] || statusConfig.OPERATIONAL
   
   return (
     <Badge variant="outline" className={config.className}>

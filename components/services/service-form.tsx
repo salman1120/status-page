@@ -36,7 +36,7 @@ export function ServiceForm() {
 
   // Watch for URL parameter changes
   useEffect(() => {
-    const shouldOpen = searchParams.get('open') === 'true'
+    const shouldOpen = searchParams.get('new') === 'true'
     setOpen(shouldOpen)
   }, [searchParams])
 
@@ -51,38 +51,38 @@ export function ServiceForm() {
     setBackendError("")
   }
 
-  const handleBlur = (field: string, value: string) => {
-    if (!touched[field as keyof typeof touched]) return
-
-    if (field === 'name') {
-      const trimmedValue = value.trim()
-      if (trimmedValue === '') {
-        setNameError("Service name is required")
-        setFormData(prev => ({ ...prev, name: '' }))
-      } else {
-        setFormData(prev => ({ ...prev, name: trimmedValue }))
-      }
-    } else if (field === 'description') {
-      const trimmedValue = value.trim()
-      setFormData(prev => ({ ...prev, description: trimmedValue }))
-    }
+  const handleClose = () => {
+    setOpen(false)
+    // Remove the new parameter from URL
+    const url = new URL(window.location.href)
+    url.searchParams.delete('new')
+    router.replace(url.pathname)
   }
 
-  const handleReset = (field: string) => {
-    setFormData(prev => ({ ...prev, [field]: '' }))
-    setTouched(prev => ({ ...prev, [field]: true }))
-    if (field === 'name') {
-      setNameError("")
-    }
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setLoading(true)
     setBackendError("")
-  }
 
-  const handleOpenChange = (newOpen: boolean) => {
-    setOpen(newOpen)
-    if (!newOpen) {
-      // Clear the URL parameter when closing
-      router.push('/dashboard/services')
-      // Reset form state
+    try {
+      const response = await fetch("/api/services", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: formData.name.trim(),
+          description: formData.description.trim(),
+          status: formData.status,
+        }),
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || "Failed to create service")
+      }
+
+      // Reset form
       setFormData({
         name: "",
         description: "",
@@ -92,140 +92,59 @@ export function ServiceForm() {
         name: false,
         description: false
       })
-      setNameError("")
-      setBackendError("")
-    }
-  }
 
-  async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    setLoading(true)
-    setBackendError("")
-
-    // Set all fields as touched on submit
-    setTouched({
-      name: true,
-      description: true
-    })
-
-    // Client-side validation
-    if (!formData.name.trim()) {
-      setNameError("Service name is required")
-      setLoading(false)
-      return
-    }
-
-    try {
-      const response = await fetch("/api/services", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          ...formData,
-          name: formData.name.trim(),
-          description: formData.description.trim()
-        }),
-      })
-
-      if (!response.ok) {
-        const data = await response.json()
-        throw new Error(data.error || "Failed to create service")
-      }
-
-      handleOpenChange(false)
+      // Close dialog and refresh page
+      handleClose()
       router.refresh()
     } catch (error) {
       console.error("Error creating service:", error)
-      setBackendError(error instanceof Error ? error.message : "Failed to create service. Please try again.")
+      setBackendError(error instanceof Error ? error.message : "Failed to create service")
     } finally {
       setLoading(false)
     }
   }
 
-  const isFormValid = formData.name.trim() !== ''
-
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button>Create Service</Button>
+        <Button>Add Service</Button>
       </DialogTrigger>
-      <DialogContent className="min-h-[450px] max-w-[600px]">
+      <DialogContent>
         <DialogHeader>
-          <DialogTitle>Create New Service</DialogTitle>
+          <DialogTitle>Add New Service</DialogTitle>
         </DialogHeader>
-        <form onSubmit={onSubmit} className="space-y-4">
-          {backendError && (
-            <div className="bg-red-50 text-red-500 px-4 py-2 rounded-md text-sm">
-              {backendError}
-            </div>
-          )}
-
-          <div className="space-y-2">
-            <label htmlFor="name" className="text-sm font-medium flex items-center gap-1">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label htmlFor="name" className="text-sm font-medium">
               Service Name
-              <span className="text-red-500">*</span>
             </label>
-            <div className="relative">
-              <Input
-                id="name"
-                name="name"
-                placeholder="Enter service name"
-                value={formData.name}
-                onChange={(e) => handleChange("name", e.target.value)}
-                onBlur={(e) => handleBlur("name", e.target.value)}
-                disabled={loading}
-                required
-              />
-              {formData.name && (
-                <button
-                  type="button"
-                  onClick={() => handleReset("name")}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              )}
-            </div>
-            {touched.name && nameError && (
-              <p className="text-sm text-red-500 mt-1">
-                {nameError}
-              </p>
+            <Input
+              id="name"
+              value={formData.name}
+              onChange={(e) => handleChange("name", e.target.value)}
+              disabled={loading}
+              className={nameError ? "border-red-500" : ""}
+            />
+            {nameError && (
+              <p className="mt-1 text-xs text-red-500">{nameError}</p>
             )}
           </div>
-
-          <div className="space-y-2">
+          <div>
             <label htmlFor="description" className="text-sm font-medium">
               Description
             </label>
-            <div className="relative">
-              <Textarea
-                id="description"
-                name="description"
-                placeholder="Enter service description"
-                value={formData.description}
-                onChange={(e) => handleChange("description", e.target.value)}
-                onBlur={(e) => handleBlur("description", e.target.value)}
-                disabled={loading}
-              />
-              {formData.description && (
-                <button
-                  type="button"
-                  onClick={() => handleReset("description")}
-                  className="absolute right-2 top-2 text-gray-400 hover:text-gray-600"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              )}
-            </div>
+            <Textarea
+              id="description"
+              value={formData.description}
+              onChange={(e) => handleChange("description", e.target.value)}
+              disabled={loading}
+            />
           </div>
-
-          <div className="space-y-2">
+          <div>
             <label htmlFor="status" className="text-sm font-medium">
               Initial Status
             </label>
             <Select
-              name="status"
               value={formData.status}
               onValueChange={(value) => handleChange("status", value)}
               disabled={loading}
@@ -234,29 +153,25 @@ export function ServiceForm() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={ServiceStatus.OPERATIONAL}>
-                  Operational
-                </SelectItem>
-                <SelectItem value={ServiceStatus.DEGRADED_PERFORMANCE}>
-                  Degraded Performance
-                </SelectItem>
-                <SelectItem value={ServiceStatus.PARTIAL_OUTAGE}>
-                  Partial Outage
-                </SelectItem>
-                <SelectItem value={ServiceStatus.MAJOR_OUTAGE}>
-                  Major Outage
-                </SelectItem>
+                {Object.values(ServiceStatus).map((status) => (
+                  <SelectItem key={status} value={status}>
+                    {status.replace(/_/g, " ")}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
-
-          <Button 
-            type="submit" 
-            className="w-full" 
-            disabled={loading || !isFormValid}
-          >
-            {loading ? "Creating..." : "Create Service"}
-          </Button>
+          {backendError && (
+            <p className="text-sm text-red-500">{backendError}</p>
+          )}
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={handleClose} disabled={loading}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={loading}>
+              {loading ? "Creating..." : "Create Service"}
+            </Button>
+          </div>
         </form>
       </DialogContent>
     </Dialog>

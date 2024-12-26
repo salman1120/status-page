@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { ServiceStatus } from "@prisma/client"
 import { pusherServer } from "@/lib/pusher"
+import { requireAdmin } from "@/lib/auth"
 
 export const dynamic = 'force-dynamic'
 
@@ -14,27 +15,21 @@ interface CreateServiceBody {
 
 export async function GET() {
   try {
-    const { userId } = auth()
-    if (!userId) {
+    const { userId, orgId } = auth()
+    if (!userId || !orgId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const user = await prisma.user.findUnique({
-      where: { clerkId: userId },
-      include: {
-        organization: {
-          include: {
-            services: true,
-          },
-        },
+    const services = await prisma.service.findMany({
+      where: {
+        organizationId: orgId
       },
+      orderBy: {
+        createdAt: 'desc'
+      }
     })
 
-    if (!user?.organization) {
-      return NextResponse.json([])
-    }
-
-    return NextResponse.json(user.organization.services)
+    return NextResponse.json(services)
   } catch (error) {
     console.error("[SERVICES_GET]", error)
     return NextResponse.json(
@@ -46,74 +41,40 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-    const { userId } = auth()
-    if (!userId) {
+    const { userId, orgId } = auth()
+    if (!userId || !orgId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const body = await req.json() as CreateServiceBody
+    // Check if user is admin
+    try {
+      await requireAdmin()
+    } catch (error) {
+      return NextResponse.json({ error: "Unauthorized: Admin access required" }, { status: 403 })
+    }
 
-    // Validate name field
-    if (!body.name || typeof body.name !== 'string' || body.name.trim() === '') {
+    const body = await req.json()
+    const { name, description, status } = body as CreateServiceBody
+
+    if (!name?.trim()) {
       return NextResponse.json(
-        { error: "Name is required and cannot be empty" },
+        { error: "Service name is required" },
         { status: 400 }
       )
     }
 
-    const user = await prisma.user.findUnique({
-      where: { clerkId: userId },
-      include: {
-        organization: {
-          include: {
-            services: true
-          }
-        },
-      },
-    })
-
-    if (!user?.organization) {
-      return NextResponse.json({ error: "Organization not found" }, { status: 404 })
-    }
-
-    // Check for duplicate service name
-    const existingService = user.organization.services.find(
-      service => service.name.toLowerCase() === body.name.trim().toLowerCase()
-    )
-    if (existingService) {
-      return NextResponse.json(
-        { error: "A service with this name already exists" },
-        { status: 400 }
-      )
-    }
-
-    // Validate status if provided
-    if (body.status && !Object.values(ServiceStatus).includes(body.status)) {
-      return NextResponse.json(
-        { error: "Invalid service status" },
-        { status: 400 }
-      )
-    }
-
+    // Create service
     const service = await prisma.service.create({
       data: {
-        name: body.name.trim(),
-        description: body.description?.trim() || '',
-        status: body.status || ServiceStatus.OPERATIONAL,
-        organization: {
-          connect: {
-            id: user.organization.id
-          }
-        }
-      },
+        name: name.trim(),
+        description: description?.trim(),
+        status: status || ServiceStatus.OPERATIONAL,
+        organizationId: orgId
+      }
     })
 
-    // Trigger Pusher event
-    await pusherServer.trigger(
-      `organization-${user.organization.id}`,
-      "service:create",
-      service
-    )
+    // Notify clients about the new service
+    await pusherServer.trigger(orgId, "service:created", service)
 
     return NextResponse.json(service)
   } catch (error) {

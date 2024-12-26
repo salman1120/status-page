@@ -1,26 +1,37 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState, useEffect } from "react"
 import { Service, ServiceStatus } from "@prisma/client"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Trash2 } from "lucide-react"
+import { useAuth } from "@clerk/nextjs"
 import { pusherClient } from "@/lib/pusher"
+import { toast } from "sonner"
 
-const statusColors = {
-  [ServiceStatus.OPERATIONAL]: "bg-green-500",
-  [ServiceStatus.DEGRADED_PERFORMANCE]: "bg-yellow-500",
-  [ServiceStatus.PARTIAL_OUTAGE]: "bg-orange-500",
-  [ServiceStatus.MAJOR_OUTAGE]: "bg-red-500",
-}
-
-const statusLabels = {
-  [ServiceStatus.OPERATIONAL]: "Operational",
-  [ServiceStatus.DEGRADED_PERFORMANCE]: "Degraded Performance",
-  [ServiceStatus.PARTIAL_OUTAGE]: "Partial Outage",
-  [ServiceStatus.MAJOR_OUTAGE]: "Major Outage",
+const statusConfig: Record<ServiceStatus, { label: string; color: string }> = {
+  OPERATIONAL: {
+    label: "Operational",
+    color: "bg-green-500/10 text-green-500 border-green-500/20",
+  },
+  DEGRADED_PERFORMANCE: {
+    label: "Degraded Performance",
+    color: "bg-yellow-500/10 text-yellow-500 border-yellow-500/20",
+  },
+  PARTIAL_OUTAGE: {
+    label: "Partial Outage",
+    color: "bg-orange-500/10 text-orange-500 border-orange-500/20",
+  },
+  MAJOR_OUTAGE: {
+    label: "Major Outage",
+    color: "bg-red-500/10 text-red-500 border-red-500/20",
+  },
+  UNDER_MAINTENANCE: {
+    label: "Under Maintenance",
+    color: "bg-blue-500/10 text-blue-500 border-blue-500/20",
+  }
 }
 
 interface ServiceListProps {
@@ -28,8 +39,9 @@ interface ServiceListProps {
 }
 
 export function ServiceList({ initialServices = [] }: ServiceListProps) {
+  const { orgId } = useAuth()
   const [services, setServices] = useState<Service[]>(initialServices)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -37,9 +49,11 @@ export function ServiceList({ initialServices = [] }: ServiceListProps) {
   }, [initialServices])
 
   useEffect(() => {
-    const channel = pusherClient.subscribe("services")
+    if (!orgId) return
 
-    channel.bind("service-created", (service: Service) => {
+    const channel = pusherClient.subscribe(orgId)
+
+    channel.bind("service:created", (service: Service) => {
       setServices((current) => {
         if (current.some(s => s.id === service.id)) {
           return current
@@ -48,7 +62,7 @@ export function ServiceList({ initialServices = [] }: ServiceListProps) {
       })
     })
 
-    channel.bind("service-updated", (updatedService: Service) => {
+    channel.bind("service:updated", (updatedService: Service) => {
       setServices((current) =>
         current.map((service) =>
           service.id === updatedService.id ? updatedService : service
@@ -56,19 +70,19 @@ export function ServiceList({ initialServices = [] }: ServiceListProps) {
       )
     })
 
-    channel.bind("service-deleted", (serviceId: string) => {
+    channel.bind("service:deleted", (serviceId: string) => {
       setServices((current) => current.filter((service) => service.id !== serviceId))
     })
 
     return () => {
       channel.unbind_all()
-      pusherClient.unsubscribe("services")
+      pusherClient.unsubscribe(orgId)
     }
-  }, [])
+  }, [orgId])
 
   const updateServiceStatus = async (serviceId: string, newStatus: ServiceStatus) => {
     try {
-      setLoading(true)
+      setLoading(serviceId)
       const response = await fetch(`/api/services/${serviceId}`, {
         method: "PATCH",
         headers: {
@@ -78,12 +92,25 @@ export function ServiceList({ initialServices = [] }: ServiceListProps) {
       })
 
       if (!response.ok) {
-        throw new Error("Failed to update service status")
+        const error = await response.json()
+        throw new Error(error.error || "Failed to update service status")
+      }
+
+      const data = await response.json()
+      if (data.success) {
+        // Update service immediately
+        setServices((current) =>
+          current.map((service) =>
+            service.id === serviceId ? data.data : service
+          )
+        )
+        toast.success("Service status updated")
       }
     } catch (error) {
       console.error("Error updating service status:", error)
+      toast.error(error instanceof Error ? error.message : "Failed to update service status")
     } finally {
-      setLoading(false)
+      setLoading(null)
     }
   }
 
@@ -95,10 +122,18 @@ export function ServiceList({ initialServices = [] }: ServiceListProps) {
       })
 
       if (!response.ok) {
-        throw new Error("Failed to delete service")
+        const error = await response.json()
+        throw new Error(error.error || "Failed to delete service")
+      }
+
+      const data = await response.json()
+      if (data.success) {
+        setServices((current) => current.filter((service) => service.id !== serviceId))
+        toast.success("Service deleted")
       }
     } catch (error) {
       console.error("Error deleting service:", error)
+      toast.error(error instanceof Error ? error.message : "Failed to delete service")
     } finally {
       setDeletingId(null)
     }
@@ -136,42 +171,29 @@ export function ServiceList({ initialServices = [] }: ServiceListProps) {
               </div>
               <div className="flex items-center gap-4">
                 <Select
-                  defaultValue={service.status}
+                  value={service.status}
                   onValueChange={(value) => 
                     updateServiceStatus(service.id, value as ServiceStatus)
                   }
-                  disabled={loading || deletingId === service.id}
+                  disabled={loading === service.id || deletingId === service.id}
                 >
                   <SelectTrigger className="w-[180px]">
                     <SelectValue>
-                      <div className="flex items-center gap-2">
-                        <Badge className={statusColors[service.status as ServiceStatus]}>
-                          {statusLabels[service.status as ServiceStatus]}
-                        </Badge>
-                      </div>
+                      <Badge className={statusConfig[service.status].color}>
+                        {statusConfig[service.status].label}
+                      </Badge>
                     </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
-                    {Object.entries(ServiceStatus).map(([key, value]) => (
-                      <SelectItem key={value} value={value}>
-                        <div className="flex items-center gap-2">
-                          <Badge className={statusColors[value]}>
-                            {statusLabels[value]}
-                          </Badge>
-                        </div>
+                    {Object.values(ServiceStatus).map((status) => (
+                      <SelectItem key={status} value={status}>
+                        <Badge className={statusConfig[status].color}>
+                          {statusConfig[status].label}
+                        </Badge>
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="text-destructive hover:text-destructive/90 hover:bg-destructive/10"
-                  onClick={() => deleteService(service.id)}
-                  disabled={deletingId === service.id}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
               </div>
             </div>
           </CardHeader>

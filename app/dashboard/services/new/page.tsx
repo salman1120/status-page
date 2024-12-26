@@ -1,28 +1,12 @@
 import { auth } from "@clerk/nextjs"
 import { redirect } from "next/navigation"
-import prisma from "@/lib/prisma"
 import { ServiceForm } from "@/components/services/service-form"
 
 export default async function NewServicePage() {
-  const { userId } = auth()
+  const { userId, orgId } = auth()
   
-  if (!userId) {
+  if (!userId || !orgId) {
     redirect("/sign-in")
-  }
-
-  // Check if user has an organization
-  const organization = await prisma.organization.findFirst({
-    where: {
-      users: {
-        some: {
-          clerkId: userId
-        }
-      }
-    }
-  })
-
-  if (!organization) {
-    redirect("/setup")
   }
 
   return (

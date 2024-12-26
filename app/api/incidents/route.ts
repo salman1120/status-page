@@ -1,111 +1,133 @@
-import { NextResponse } from "next/server"
 import { auth } from "@clerk/nextjs"
+import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { IncidentStatus } from "@prisma/client"
 import { pusherServer } from "@/lib/pusher"
+
+export const dynamic = 'force-dynamic'
+
+interface CreateIncidentBody {
+  title: string
+  description: string
+  serviceId: string
+  status?: IncidentStatus
+}
 
 export async function GET() {
   try {
-    const { userId } = auth()
-    if (!userId) {
+    const { userId, orgId } = auth()
+    if (!userId || !orgId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const user = await prisma.user.findUnique({
-      where: { clerkId: userId },
-      include: {
-        organization: {
-          include: {
-            incidents: {
-              include: {
-                service: true,
-                updates: {
-                  orderBy: { createdAt: "desc" },
-                },
-              },
-              orderBy: { startedAt: "desc" },
-            },
-          },
-        },
+    const incidents = await prisma.incident.findMany({
+      where: {
+        organizationId: orgId
       },
+      include: {
+        service: true,
+        updates: {
+          orderBy: {
+            createdAt: 'desc'
+          }
+        }
+      },
+      orderBy: {
+        startedAt: 'desc'
+      }
     })
 
-    if (!user?.organization) {
-      return NextResponse.json({ error: "Organization not found" }, { status: 404 })
-    }
-
-    return NextResponse.json(user.organization.incidents)
+    return NextResponse.json(incidents)
   } catch (error) {
-    console.error("Failed to fetch incidents:", error)
-    return NextResponse.json({ error: "Failed to fetch incidents" }, { status: 500 })
+    console.error("[INCIDENTS_GET]", error)
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    )
   }
 }
 
 export async function POST(req: Request) {
   try {
-    const { userId } = auth()
-    if (!userId) {
+    const { userId, orgId } = auth()
+    if (!userId || !orgId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const user = await prisma.user.findUnique({
-      where: { clerkId: userId },
-      include: { organization: true },
-    })
-
-    if (!user?.organization) {
-      return NextResponse.json({ error: "Organization not found" }, { status: 404 })
-    }
-
     const body = await req.json()
+    const { title, description, serviceId, status } = body as CreateIncidentBody
 
-    // Validate title field
-    if (!body.title || typeof body.title !== 'string' || body.title.trim() === '') {
+    if (!title?.trim()) {
       return NextResponse.json(
-        { error: "Title is required and cannot be empty" },
+        { error: "Incident title is required" },
         { status: 400 }
       )
     }
 
-    // Check for duplicate title for active incidents
-    const existingIncident = await prisma.incident.findFirst({
+    if (!description?.trim()) {
+      return NextResponse.json(
+        { error: "Incident description is required" },
+        { status: 400 }
+      )
+    }
+
+    if (!serviceId) {
+      return NextResponse.json(
+        { error: "Service ID is required" },
+        { status: 400 }
+      )
+    }
+
+    // Verify service belongs to organization
+    const service = await prisma.service.findFirst({
       where: {
-        organizationId: user.organization.id,
-        title: {
-          equals: body.title.trim(),
-          mode: 'insensitive'
-        },
-        status: {
-          not: 'RESOLVED'
+        id: serviceId,
+        organizationId: orgId
+      }
+    })
+
+    if (!service) {
+      return NextResponse.json(
+        { error: "Service not found" },
+        { status: 404 }
+      )
+    }
+
+    // Create incident
+    const incident = await prisma.incident.create({
+      data: {
+        title: title.trim(),
+        description: description.trim(),
+        status: status || IncidentStatus.INVESTIGATING,
+        serviceId,
+        organizationId: orgId,
+        createdById: userId,
+        updates: {
+          create: {
+            message: description.trim(),
+            createdById: userId
+          }
+        }
+      },
+      include: {
+        service: true,
+        updates: {
+          orderBy: {
+            createdAt: 'desc'
+          }
         }
       }
     })
 
-    if (existingIncident) {
-      return NextResponse.json(
-        { error: "An active incident with this title already exists" },
-        { status: 400 }
-      )
-    }
+    // Notify clients about the new incident
+    await pusherServer.trigger(orgId, "incident:created", incident)
 
-    const incident = await prisma.incident.create({
-      data: {
-        title: body.title.trim(),
-        description: body.description?.trim() || '',
-        serviceId: body.serviceId,
-        organizationId: user.organization.id,
-        createdById: user.id,
-        status: "INVESTIGATING",
-      },
-      include: {
-        service: true,
-        updates: true,
-      },
-    })
-
-    await pusherServer.trigger("incidents", "incident-created", incident)
     return NextResponse.json(incident)
   } catch (error) {
-    console.error("Failed to create incident:", error)
-    return NextResponse.json({ error: "Failed to create incident" }, { status: 500 })
+    console.error("[INCIDENTS_POST]", error)
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    )
   }
 }

@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation"
+import { clerkClient } from "@clerk/nextjs"
 import { prisma } from "@/lib/prisma"
 import { PublicServiceList } from "@/components/public/service-list"
 import { PublicIncidentList } from "@/components/public/incident-list"
@@ -12,12 +13,26 @@ interface StatusPageProps {
 }
 
 export default async function StatusPage({ params }: StatusPageProps) {
-  const organization = await prisma.organization.findUnique({
-    where: { slug: params.slug },
-    include: {
-      services: true,
-      incidents: {
+  try {
+    // Get organization from Clerk
+    const organizations = await clerkClient.organizations.getOrganizationList({
+      slug: [params.slug]
+    })
+    
+    const organization = organizations[0]
+    if (!organization) {
+      return notFound()
+    }
+
+    // Get services and incidents from Prisma
+    const [services, incidents] = await Promise.all([
+      prisma.service.findMany({
+        where: { organizationId: organization.id },
+        orderBy: { name: 'asc' }
+      }),
+      prisma.incident.findMany({
         where: {
+          organizationId: organization.id,
           OR: [
             { status: "INVESTIGATING" },
             { status: "IDENTIFIED" },
@@ -31,70 +46,48 @@ export default async function StatusPage({ params }: StatusPageProps) {
           ]
         },
         include: {
-          service: true,
-          updates: {
-            orderBy: {
-              createdAt: "desc"
-            },
-            take: 5
-          }
+          service: true
+        },
+        orderBy: {
+          startedAt: 'desc'
         }
-      }
-    }
-  })
+      })
+    ])
 
-  if (!organization) {
-    notFound()
-  }
+    // Format incidents dates
+    const formattedIncidents = incidents.map(incident => ({
+      ...incident,
+      startedAt: incident.startedAt.toISOString(),
+      resolvedAt: incident.resolvedAt ? incident.resolvedAt.toISOString() : null
+    }))
 
-  // Sort services by name
-  const sortedServices = [...organization.services].sort((a, b) => 
-    a.name.localeCompare(b.name)
-  )
-
-  // Sort incidents by creation time
-  const incidents = organization.incidents as any[]
-  const sortedIncidents = [...incidents].map(incident => ({
-    ...incident,
-    createdAt: incident.createdAt ? new Date(incident.createdAt).toISOString() : null,
-    updatedAt: incident.updatedAt ? new Date(incident.updatedAt).toISOString() : null,
-    startedAt: incident.startedAt ? new Date(incident.startedAt).toISOString() : null,
-    resolvedAt: incident.resolvedAt ? new Date(incident.resolvedAt).toISOString() : null,
-    updates: incident.updates?.map(update => ({
-      ...update,
-      createdAt: update.createdAt ? new Date(update.createdAt).toISOString() : null
-    })) || []
-  })).sort(
-    (a, b) => {
-      const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0
-      const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0
-      return dateB - dateA
-    }
-  )
-
-  return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-12">
-        <div className="space-y-8">
-          <div className="text-center">
-            <h1 className="text-4xl font-bold tracking-tight">
-              System Status
-            </h1>
-            <p className="mt-4 text-lg text-gray-600">
-              Current status of {organization.name}&apos;s services
-            </p>
-          </div>
-          
-          <PublicServiceList services={sortedServices} />
-          
-          <div className="space-y-4">
-            <h2 className="text-2xl font-bold tracking-tight">
-              Incidents
-            </h2>
-            <PublicIncidentList incidents={sortedIncidents} />
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-12">
+          <div className="space-y-8">
+            <div className="text-center">
+              <h1 className="text-4xl font-bold tracking-tight">
+                System Status
+              </h1>
+              <p className="mt-4 text-lg text-gray-600">
+                Current status of {organization.name}&apos;s services
+              </p>
+            </div>
+            
+            <PublicServiceList services={services} />
+            
+            <div className="space-y-4">
+              <h2 className="text-2xl font-bold tracking-tight">
+                Incidents
+              </h2>
+              <PublicIncidentList incidents={formattedIncidents} />
+            </div>
           </div>
         </div>
       </div>
-    </div>
-  )
+    )
+  } catch (error) {
+    console.error("Error loading status page:", error)
+    return notFound()
+  }
 }

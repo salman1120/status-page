@@ -1,53 +1,53 @@
+import { Heading } from "@/components/ui/heading"
 import { IncidentForm } from "@/components/incidents/incident-form"
 import { IncidentList } from "@/components/incidents/incident-list"
-import { Heading } from "@/components/ui/heading"
 import { Separator } from "@/components/ui/separator"
 import { auth } from "@clerk/nextjs"
 import { redirect } from "next/navigation"
 import { prisma } from "@/lib/prisma"
 
 export default async function IncidentsPage() {
-  const { userId } = auth()
+  const { userId, orgId } = auth()
   
-  if (!userId) {
+  if (!userId || !orgId) {
     redirect("/sign-in")
   }
 
-  const user = await prisma.user.findUnique({
-    where: { clerkId: userId },
-    include: {
-      organization: {
-        include: {
-          services: true,
-          incidents: {
-            include: {
-              service: true
-            }
-          }
-        }
-      }
+  // Get services for the organization
+  const services = await prisma.service.findMany({
+    where: {
+      organizationId: orgId
     }
   })
 
-  if (!user?.organization) {
-    redirect("/setup")
-  }
-
-  // Sort incidents by creation time
-  const sortedIncidents = [...user.organization.incidents].sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  )
+  // Get incidents for the organization
+  const incidents = await prisma.incident.findMany({
+    where: {
+      organizationId: orgId
+    },
+    include: {
+      service: true,
+      updates: {
+        orderBy: {
+          createdAt: 'desc'
+        }
+      }
+    },
+    orderBy: {
+      startedAt: 'desc'
+    }
+  })
 
   return (
     <div className="flex-1 space-y-6 p-8 pt-6">
       <div className="flex items-center justify-between">
         <div>
-          <Heading title="Incidents" description="Track and manage service incidents" />
+          <Heading title="Incidents" description="View and manage service incidents" />
         </div>
-        <IncidentForm services={user.organization.services} />
+        <IncidentForm services={services} />
       </div>
       <Separator />
-      <IncidentList initialIncidents={sortedIncidents} />
+      <IncidentList initialIncidents={incidents} />
     </div>
   )
 }

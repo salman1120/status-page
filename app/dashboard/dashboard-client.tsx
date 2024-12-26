@@ -1,58 +1,76 @@
-import { auth, clerkClient } from "@clerk/nextjs"
-import { redirect } from "next/navigation"
+'use client'
+
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { Activity, AlertCircle, Settings, Shield, Users } from "lucide-react"
-import { prisma } from "@/lib/prisma"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { StatusBadge } from "@/components/status-badge"
 import { Shell } from "@/components/layout/shell"
+import { useAuth } from "@clerk/nextjs"
+import { Service, Incident } from "@prisma/client"
+import { pusherClient } from "@/lib/pusher"
 
-export const dynamic = 'force-dynamic'
-
-export default async function Dashboard() {
-  const { userId, orgId } = auth()
-  
-  if (!userId || !orgId) {
-    redirect("/sign-in")
+interface DashboardClientProps {
+  initialServices: Service[]
+  initialIncidents: (Incident & {
+    service: Service
+    updates: { message: string }[]
+  })[]
+  organization: {
+    name: string
   }
+}
 
-  // Get organization details from Clerk
-  const organization = await clerkClient.organizations.getOrganization({ organizationId: orgId })
-
-  // Get services for the organization
-  const services = await prisma.service.findMany({
-    where: {
-      organizationId: orgId
-    }
-  })
-
-  // Get recent incidents
-  const recentIncidents = await prisma.incident.findMany({
-    where: {
-      organizationId: orgId,
-      status: {
-        not: "RESOLVED"
-      }
-    },
-    include: {
-      service: true,
-      updates: {
-        orderBy: {
-          createdAt: "desc"
-        },
-        take: 1
-      }
-    },
-    orderBy: {
-      startedAt: "desc"
-    },
-    take: 3
-  })
+export function DashboardClient({ 
+  initialServices = [],
+  initialIncidents = [],
+  organization 
+}: DashboardClientProps) {
+  const { orgId } = useAuth()
+  const [services, setServices] = useState<Service[]>(initialServices)
+  const [incidents, setIncidents] = useState(initialIncidents)
 
   // Calculate service status counts
   const operationalServices = services.filter(service => service.status === "OPERATIONAL")
   const majorOutageServices = services.filter(service => service.status === "MAJOR_OUTAGE")
+
+  useEffect(() => {
+    if (!orgId) return
+
+    // Subscribe to service updates
+    const channel = pusherClient.subscribe(orgId)
+    
+    channel.bind('service:updated', (service: Service) => {
+      setServices(prev => prev.map(s => s.id === service.id ? service : s))
+    })
+
+    channel.bind('service:created', (service: Service) => {
+      setServices(prev => [...prev, service])
+    })
+
+    channel.bind('service:deleted', (serviceId: string) => {
+      setServices(prev => prev.filter(s => s.id !== serviceId))
+    })
+
+    // Subscribe to incident updates
+    channel.bind('incident:created', (incident: any) => {
+      setIncidents(prev => [incident, ...prev].slice(0, 3))
+    })
+
+    channel.bind('incident:updated', (incident: any) => {
+      setIncidents(prev => prev.map(i => i.id === incident.id ? incident : i))
+    })
+
+    channel.bind('incident:deleted', (incidentId: string) => {
+      setIncidents(prev => prev.filter(i => i.id !== incidentId))
+    })
+
+    return () => {
+      channel.unbind()
+      pusherClient.unsubscribe(orgId)
+    }
+  }, [orgId])
 
   return (
     <Shell>
@@ -129,7 +147,7 @@ export default async function Dashboard() {
                   <AlertCircle className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">{recentIncidents.length}</div>
+                  <div className="text-2xl font-bold">{incidents.length}</div>
                   <p className="text-xs text-muted-foreground">
                     Ongoing incidents being tracked
                   </p>
@@ -143,6 +161,7 @@ export default async function Dashboard() {
                   <Users className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
+                  <div className="text-2xl font-bold">-</div>
                   <p className="text-xs text-muted-foreground">
                     Manage team access
                   </p>
@@ -156,6 +175,7 @@ export default async function Dashboard() {
                   <Settings className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
+                  <div className="text-2xl font-bold">-</div>
                   <p className="text-xs text-muted-foreground">
                     Configure dashboard
                   </p>
@@ -166,14 +186,14 @@ export default async function Dashboard() {
         )}
 
         {/* Recent Incidents */}
-        {recentIncidents.length > 0 && (
+        {incidents.length > 0 && (
           <div className="space-y-4">
             <Link href="/dashboard/incidents">
               <h2 className="text-lg font-semibold tracking-tight hover:text-primary cursor-pointer">Recent Incidents</h2>
             </Link>
             <div className="grid gap-4">
-              {recentIncidents.map((incident) => (
-                <Link key={incident.id} href="/dashboard/incidents">
+              {incidents.map((incident) => (
+                <Link key={incident.id} href={`/dashboard/incidents/${incident.id}`}>
                   <Card className="hover:bg-muted cursor-pointer transition-colors">
                     <CardHeader className="pb-2">
                       <div className="flex items-center justify-between">
@@ -186,6 +206,11 @@ export default async function Dashboard() {
                         {incident.service.name} • {new Date(incident.startedAt).toLocaleDateString()}
                       </CardDescription>
                     </CardHeader>
+                    <CardContent>
+                      <p className="text-sm text-muted-foreground">
+                        {incident.updates[0]?.message || incident.description}
+                      </p>
+                    </CardContent>
                   </Card>
                 </Link>
               ))}

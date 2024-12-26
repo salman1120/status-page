@@ -10,6 +10,7 @@ import { formatDistanceToNow } from "date-fns"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { ExtendedIncident } from "@/types"
+import { useAuth } from "@clerk/nextjs"
 
 interface IncidentListProps {
   initialIncidents: ExtendedIncident[]
@@ -39,6 +40,7 @@ const statusConfig = {
 }
 
 export function IncidentList({ initialIncidents = [] }: IncidentListProps) {
+  const { orgId } = useAuth()
   const [incidents, setIncidents] = useState<ExtendedIncident[]>(initialIncidents)
   const [loading, setLoading] = useState<string | null>(null)
 
@@ -47,9 +49,11 @@ export function IncidentList({ initialIncidents = [] }: IncidentListProps) {
   }, [initialIncidents])
 
   useEffect(() => {
-    const channel = pusherClient.subscribe("incidents")
+    if (!orgId) return
+
+    const channel = pusherClient.subscribe(orgId)
     
-    channel.bind("incident-created", (incident: ExtendedIncident) => {
+    channel.bind("incident:created", (incident: ExtendedIncident) => {
       setIncidents((current) => {
         if (current.some(i => i.id === incident.id)) {
           return current
@@ -58,7 +62,7 @@ export function IncidentList({ initialIncidents = [] }: IncidentListProps) {
       })
     })
 
-    channel.bind("incident-updated", (incident: ExtendedIncident) => {
+    channel.bind("incident:updated", (incident: ExtendedIncident) => {
       setIncidents((current) =>
         current.map((i) => (i.id === incident.id ? incident : i))
       )
@@ -66,20 +70,22 @@ export function IncidentList({ initialIncidents = [] }: IncidentListProps) {
 
     return () => {
       channel.unbind_all()
-      pusherClient.unsubscribe("incidents")
+      pusherClient.unsubscribe(orgId)
     }
-  }, [])
+  }, [orgId])
 
   const updateStatus = async (incidentId: string, newStatus: IncidentStatus) => {
     try {
       setLoading(incidentId)
-      toast.success("Status updating")
       const response = await fetch(`/api/incidents/${incidentId}/status`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ status: newStatus }),
+        body: JSON.stringify({ 
+          status: newStatus,
+          message: `Status changed to ${statusConfig[newStatus].label}`
+        }),
       })
 
       if (!response.ok) {
@@ -87,7 +93,15 @@ export function IncidentList({ initialIncidents = [] }: IncidentListProps) {
         throw new Error(error.error || "Failed to update status")
       }
 
-      toast.success("Status updated successfully")
+      const data = await response.json()
+      if (data.success) {
+        // Update the incident immediately
+        const updatedIncident = data.incident
+        setIncidents((current) =>
+          current.map((i) => (i.id === updatedIncident.id ? updatedIncident : i))
+        )
+        toast.success("Status updated successfully")
+      }
     } catch (error) {
       console.error("Failed to update incident status:", error)
       toast.error(error instanceof Error ? error.message : "Failed to update status")
@@ -174,7 +188,7 @@ export function IncidentList({ initialIncidents = [] }: IncidentListProps) {
                   variant="outline"
                   size="sm"
                   onClick={() => updateStatus(incident.id, status as IncidentStatus)}
-                  disabled={loading === incident.id}
+                  disabled={loading === incident.id || incident.status === status}
                   className={cn(
                     "border transition-colors",
                     incident.status === status ? config.color : "hover:" + config.color

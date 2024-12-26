@@ -1,7 +1,8 @@
 "use client"
 
 import { useState } from "react"
-import { Organization } from "@prisma/client"
+import { useOrganization } from "@clerk/nextjs"
+import { useAdmin } from "@/hooks/use-admin"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
@@ -9,15 +10,17 @@ import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import { X } from "lucide-react"
 
-interface OrganizationProfileProps {
-  organization: Organization
-}
-
-export function OrganizationProfile({ organization }: OrganizationProfileProps) {
+export function OrganizationProfile() {
+  const { organization, isLoaded } = useOrganization()
+  const isAdmin = useAdmin()
   const [loading, setLoading] = useState(false)
-  const [name, setName] = useState(organization.name)
+  const [name, setName] = useState(organization?.name || "")
   const [nameError, setNameError] = useState("")
   const [touched, setTouched] = useState(false)
+
+  if (!isLoaded || !organization || !isAdmin) {
+    return null
+  }
 
   const handleChange = (value: string) => {
     // Always trim spaces for name
@@ -39,8 +42,8 @@ export function OrganizationProfile({ organization }: OrganizationProfileProps) 
   }
 
   const handleReset = () => {
-    setName('')
-    setTouched(true)
+    setName(organization.name)
+    setTouched(false)
     setNameError("")
   }
 
@@ -48,31 +51,32 @@ export function OrganizationProfile({ organization }: OrganizationProfileProps) 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setTouched(true)
+    if (loading) return
 
-    // Client-side validation
-    if (!name.trim()) {
+    const trimmedName = name.trim()
+    if (trimmedName === '') {
       setNameError("Organization name is required")
       return
     }
 
-    // No changes made
     if (name.trim() === organization.name) {
       return
     }
 
+    setLoading(true)
     try {
-      setLoading(true)
       const response = await fetch(`/api/organization`, {
-        method: "PATCH",
+        method: 'PATCH',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ name: name.trim() }),
+        body: JSON.stringify({
+          name: trimmedName,
+        }),
       })
 
+      const data = await response.json()
       if (!response.ok) {
-        const data = await response.json()
         throw new Error(data.error || "Failed to update organization")
       }
 
@@ -96,53 +100,43 @@ export function OrganizationProfile({ organization }: OrganizationProfileProps) 
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="name" className="flex items-center gap-1">
-              Organization Name
-              <span className="text-red-500">*</span>
-            </Label>
-            <div className="relative">
-              <Input
-                id="name"
-                placeholder="Enter organization name"
-                value={name}
-                onChange={(e) => handleChange(e.target.value)}
-                onBlur={(e) => handleBlur(e.target.value)}
-                disabled={loading}
-                required
-              />
-              {name && name !== organization.name && (
-                <button
-                  type="button"
-                  onClick={handleReset}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                >
-                  <X className="h-4 w-4" />
-                </button>
+            <div className="space-y-1">
+              <Label htmlFor="name">Organization Name</Label>
+              <div className="relative">
+                <Input
+                  id="name"
+                  value={name}
+                  onChange={(e) => handleChange(e.target.value)}
+                  onBlur={(e) => handleBlur(e.target.value)}
+                  placeholder="Enter organization name"
+                  className={nameError ? "border-red-500" : ""}
+                />
+                {name && name !== organization.name && (
+                  <button
+                    type="button"
+                    onClick={handleReset}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+              {nameError && (
+                <p className="text-sm text-red-500">{nameError}</p>
               )}
             </div>
-            {touched && nameError && (
-              <p className="text-sm text-red-500 mt-1">
-                {nameError}
-              </p>
-            )}
+            <div className="space-y-1">
+              <Label htmlFor="slug">Organization Slug</Label>
+              <Input
+                id="slug"
+                value={organization.slug || ""}
+                disabled
+                className="bg-muted"
+              />
+            </div>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="slug">Organization Slug</Label>
-            <Input
-              id="slug"
-              value={organization.slug}
-              disabled
-              className="bg-muted"
-            />
-            <p className="text-xs text-muted-foreground">
-              This is your unique identifier used in your status page URL
-            </p>
-          </div>
-          <Button 
-            type="submit" 
-            disabled={loading || !isFormValid}
-          >
-            {loading ? "Saving..." : "Save Changes"}
+          <Button type="submit" disabled={!isFormValid || loading}>
+            {loading ? "Updating..." : "Update Organization"}
           </Button>
         </form>
       </CardContent>

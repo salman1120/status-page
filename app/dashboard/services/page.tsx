@@ -7,26 +7,21 @@ import { redirect } from "next/navigation"
 import { prisma } from "@/lib/prisma"
 
 export default async function ServicesPage() {
-  const { userId } = auth()
+  const { userId, orgId } = auth()
   
-  if (!userId) {
+  if (!userId || !orgId) {
     redirect("/sign-in")
   }
 
-  const user = await prisma.user.findUnique({
-    where: { clerkId: userId },
-    include: {
-      organization: {
-        include: {
-          services: true,
-        },
-      },
+  // Get services for the organization
+  const services = await prisma.service.findMany({
+    where: {
+      organizationId: orgId
     },
+    orderBy: {
+      createdAt: 'desc'
+    }
   })
-
-  if (!user?.organization) {
-    redirect("/setup")
-  }
 
   return (
     <div className="flex-1 space-y-6 p-8 pt-6">
@@ -37,7 +32,7 @@ export default async function ServicesPage() {
         <ServiceForm />
       </div>
       <Separator />
-      <ServiceList initialServices={user.organization.services} />
+      <ServiceList initialServices={services} />
     </div>
   )
 }

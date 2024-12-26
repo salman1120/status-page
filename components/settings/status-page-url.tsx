@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Organization } from "@prisma/client"
+import { useOrganization } from "@clerk/nextjs"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
@@ -9,12 +9,13 @@ import { Button } from "@/components/ui/button"
 import { Check, Copy } from "lucide-react"
 import { toast } from "sonner"
 
-interface StatusPageUrlProps {
-  organization: Organization
-}
-
-export function StatusPageUrl({ organization }: StatusPageUrlProps) {
+export function StatusPageUrl() {
+  const { organization, isLoaded } = useOrganization()
   const [copied, setCopied] = useState(false)
+
+  if (!isLoaded || !organization) {
+    return null
+  }
 
   // Get the base URL, fallback to window.location.origin in client
   const baseUrl = typeof window !== 'undefined' 
@@ -39,34 +40,32 @@ export function StatusPageUrl({ organization }: StatusPageUrlProps) {
       <CardHeader>
         <CardTitle>Public Status Page</CardTitle>
         <CardDescription>
-          Your public status page URL where customers can view your service status
+          Share this URL with your users to let them view your service status
         </CardDescription>
       </CardHeader>
       <CardContent>
         <div className="space-y-2">
-          <Label>Status Page URL</Label>
-          <div className="flex items-center gap-2">
+          <Label htmlFor="url">Status Page URL</Label>
+          <div className="flex space-x-2">
             <Input
+              id="url"
               value={statusPageUrl}
               readOnly
-              className="font-mono text-sm"
+              className="bg-muted"
             />
-            <Button 
-              variant="outline" 
+            <Button
+              type="button"
+              variant="outline"
               size="icon"
               onClick={copyToClipboard}
-              className="shrink-0"
             >
               {copied ? (
-                <Check className="h-4 w-4 text-green-500" />
+                <Check className="h-4 w-4" />
               ) : (
                 <Copy className="h-4 w-4" />
               )}
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground">
-            Share this URL with your customers to let them view your service status
-          </p>
         </div>
       </CardContent>
     </Card>

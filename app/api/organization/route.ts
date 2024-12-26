@@ -1,153 +1,177 @@
 import { NextResponse } from "next/server"
-import { auth, currentUser } from "@clerk/nextjs"
+import { auth, clerkClient } from "@clerk/nextjs"
 import { prisma } from "@/lib/prisma"
+import { ServiceStatus } from "@prisma/client"
+
+interface UpdateOrganizationBody {
+  name?: string
+  description?: string
+}
 
 export const dynamic = 'force-dynamic'
 
-interface CreateOrganizationBody {
-  name: string
-  slug: string
-}
-
-interface UpdateOrganizationBody {
-  name: string
-}
-
-export async function POST(req: Request) {
+export async function POST(request: Request) {
   try {
-    const { userId } = auth()
-    const user = await currentUser()
-    
-    if (!userId || !user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    // Get auth session
+    const { userId, orgId } = auth()
+    console.log("Auth userId:", userId)
+
+    if (!userId || !orgId) {
+      console.log("No userId or orgId found in auth")
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" }
+      })
     }
 
-    const body = await req.json() as CreateOrganizationBody
+    // Parse and validate request
+    const body = await request.json()
+    console.log("Request body:", body)
 
-    if (!body.name || !body.slug) {
-      return NextResponse.json(
-        { error: "Name and slug are required" },
-        { status: 400 }
-      )
+    if (!body?.name || !body?.slug) {
+      console.log("Missing required fields:", { name: body?.name, slug: body?.slug })
+      return new Response(JSON.stringify({ error: "Name and slug are required" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" }
+      })
     }
 
-    // Check if organization with slug already exists
-    const existingOrg = await prisma.organization.findUnique({
-      where: { slug: body.slug }
+    if (!/^[a-z0-9-]+$/.test(body.slug)) {
+      console.log("Invalid slug format:", body.slug)
+      return new Response(JSON.stringify({ 
+        error: "Slug can only contain lowercase letters, numbers, and hyphens" 
+      }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" }
+      })
+    }
+
+    // Create organization in Clerk
+    console.log("Creating organization:", { name: body.name, slug: body.slug, userId })
+    const organization = await clerkClient.organizations.createOrganization({
+      name: body.name,
+      slug: body.slug,
+      createdBy: userId,
     })
+    console.log("Organization created:", organization)
 
-    if (existingOrg) {
-      return NextResponse.json(
-        { error: "Organization with this slug already exists" },
-        { status: 400 }
-      )
-    }
+    // Add the current user as an admin
+    console.log("Adding user as admin:", { userId, organizationId: organization.id })
+    const membership = await clerkClient.organizations.createOrganizationMembership({
+      organizationId: organization.id,
+      userId: userId,
+      role: "admin",
+    })
+    console.log("User added as admin:", membership)
 
-    // Create organization
-    const organization = await prisma.organization.create({
-      data: {
-        name: body.name,
-        slug: body.slug,
-        users: {
-          create: {
-            clerkId: userId,
-            email: user.emailAddresses[0].emailAddress,
-            name: `${user.firstName} ${user.lastName}`,
-            role: "admin"
-          }
-        }
+    // Create default services
+    const defaultServices = [
+      {
+        name: "Website",
+        description: "Main website and user interface",
+        status: "OPERATIONAL",
+        organizationId: organization.id
       },
-      include: {
-        users: true
-      }
-    })
-
-    return NextResponse.json(organization)
-  } catch (error) {
-    console.error("[ORGANIZATION_CREATE]", error)
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 }
-    )
-  }
-}
-
-export async function GET() {
-  try {
-    const { userId } = auth()
-    if (!userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    const organization = await prisma.organization.findFirst({
-      where: {
-        users: {
-          some: {
-            clerkId: userId
-          }
-        }
+      {
+        name: "API",
+        description: "Backend API and services",
+        status: "OPERATIONAL",
+        organizationId: organization.id
       },
-      include: {
-        users: true,
-        services: true
+      {
+        name: "Database",
+        description: "Database and data storage",
+        status: "OPERATIONAL",
+        organizationId: organization.id
       }
+    ]
+
+    console.log("Creating default services")
+    const services = await prisma.service.createMany({
+      data: defaultServices
+    })
+    console.log("Default services created:", services)
+
+    return new Response(JSON.stringify({
+      organization,
+      services
+    }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" }
     })
 
-    return NextResponse.json(organization)
-  } catch (error) {
-    console.error("[ORGANIZATION_GET]", error)
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 }
-    )
+  } catch (error: any) {
+    console.error("Error creating organization:", error)
+    return new Response(JSON.stringify({ 
+      error: "Internal server error",
+      details: error.message
+    }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" }
+    })
   }
 }
 
 export async function PATCH(req: Request) {
   try {
-    const { userId } = auth()
-    
-    if (!userId) {
+    const { userId, orgId } = auth()
+    if (!userId || !orgId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const user = await prisma.user.findUnique({
-      where: { clerkId: userId },
-      include: { organization: true },
+    const body = await req.json()
+
+    // Update organization in Clerk
+    const updatedOrg = await clerkClient.organizations.updateOrganization(orgId, {
+      name: body.name,
     })
 
-    if (!user?.organization) {
-      return NextResponse.json({ error: "Organization not found" }, { status: 404 })
-    }
-
-    const body = await req.json() as UpdateOrganizationBody
-
-    if (!body.name || typeof body.name !== "string") {
-      return NextResponse.json(
-        { error: "Name is required and must be a string" },
-        { status: 400 }
-      )
-    }
-
-    const organization = await prisma.organization.update({
-      where: {
-        id: user.organization.id,
-      },
-      data: {
-        name: body.name,
-      },
-      include: {
-        users: true,
-        services: true
-      }
-    })
-
-    return NextResponse.json(organization)
+    return NextResponse.json({ success: true, data: updatedOrg })
   } catch (error) {
-    console.error("[ORGANIZATION_UPDATE]", error)
+    console.error("[API] Error updating organization:", error)
     return NextResponse.json(
-      { error: "Internal Server Error" },
+      { success: false, error: "Internal server error" },
       { status: 500 }
     )
+  }
+}
+
+export async function GET(request: Request) {
+  try {
+    const { userId } = auth()
+    console.log("GET /api/organization - Auth userId:", userId)
+
+    if (!userId) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" }
+      })
+    }
+
+    const user = await clerkClient.users.getUser(userId)
+    console.log("User found:", {
+      id: user.id,
+      email: user.emailAddresses[0]?.emailAddress
+    })
+
+    return new Response(JSON.stringify({
+      status: "ok",
+      user: {
+        id: user.id,
+        email: user.emailAddresses[0]?.emailAddress
+      }
+    }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" }
+    })
+  } catch (error: any) {
+    console.error("Error in GET:", error)
+    return new Response(JSON.stringify({ 
+      error: "Internal server error",
+      details: error.message
+    }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" }
+    })
   }
 }

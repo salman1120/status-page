@@ -1,28 +1,18 @@
-import { auth } from "@clerk/nextjs"
+import { auth, clerkClient } from "@clerk/nextjs"
 import { redirect } from "next/navigation"
 import { Heading } from "@/components/ui/heading"
 import { Separator } from "@/components/ui/separator"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import prisma from "@/lib/prisma"
 import { OrganizationProfile } from "@clerk/nextjs"
 
 export default async function TeamPage() {
-  const { userId } = auth()
+  const { userId, orgId } = auth()
   
-  if (!userId) {
+  if (!userId || !orgId) {
     redirect("/sign-in")
   }
 
-  // Check if user has an organization
-  const organization = await prisma.organization.findFirst({
-    where: {
-      users: {
-        some: {
-          clerkId: userId
-        }
-      }
-    }
-  })
+  const organization = await clerkClient.organizations.getOrganization({ organizationId: orgId })
 
   if (!organization) {
     redirect("/setup")

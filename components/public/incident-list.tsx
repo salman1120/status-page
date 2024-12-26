@@ -85,32 +85,13 @@ export function PublicIncidentList({ incidents }: PublicIncidentListProps) {
             
             <div className="space-y-1 text-sm text-muted-foreground mb-4">
               <div>Affected Service: {incident.service.name}</div>
-              <div>Started {formatDate(incident.startedAt)}</div>
-              {incident.resolvedAt && (
-                <div>Resolved {formatDate(incident.resolvedAt)}</div>
-              )}
+              <div>Added {formatDate(incident.startedAt)}</div>
             </div>
 
             {incident.description && (
               <p className="text-sm text-muted-foreground mb-4">
                 {incident.description}
               </p>
-            )}
-
-            {incident.updates?.length > 0 && (
-              <div className="border-t pt-4">
-                <div className="space-y-3">
-                  <h4 className="text-sm font-semibold">Latest Updates</h4>
-                  {incident.updates.map((update) => (
-                    <div key={update.id} className="text-sm text-muted-foreground">
-                      <span className="font-medium">
-                        {formatDate(update.createdAt)}:
-                      </span>{" "}
-                      {update.message}
-                    </div>
-                  ))}
-                </div>
-              </div>
             )}
           </div>
         </Card>

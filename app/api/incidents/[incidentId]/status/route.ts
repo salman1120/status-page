@@ -1,111 +1,88 @@
-import { NextResponse } from "next/server"
 import { auth } from "@clerk/nextjs"
+import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { pusherServer } from "@/lib/pusher"
 import { IncidentStatus } from "@prisma/client"
+import { pusherServer } from "@/lib/pusher"
+
+interface UpdateIncidentStatusBody {
+  status: IncidentStatus
+  message?: string
+}
 
 export async function PATCH(
   req: Request,
   { params }: { params: { incidentId: string } }
 ) {
   try {
-    const { userId } = auth()
-    if (!userId) {
+    const { userId, orgId } = auth()
+    if (!userId || !orgId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const user = await prisma.user.findUnique({
-      where: { clerkId: userId },
-      include: { organization: true },
-    })
-
-    if (!user?.organization) {
-      return NextResponse.json({ error: "Organization not found" }, { status: 404 })
-    }
-
     const body = await req.json()
-    const { status } = body
+    const { status, message } = body as UpdateIncidentStatusBody
 
-    // Validate the status
-    if (!Object.values(IncidentStatus).includes(status as IncidentStatus)) {
-      return NextResponse.json({ error: "Invalid status" }, { status: 400 })
+    if (!status) {
+      return NextResponse.json(
+        { error: "Status is required" },
+        { status: 400 }
+      )
     }
 
-    // First check if the incident exists and belongs to the organization
-    const existingIncident = await prisma.incident.findFirst({
+    // Verify incident exists and belongs to organization
+    const incident = await prisma.incident.findFirst({
       where: {
         id: params.incidentId,
-        organizationId: user.organization.id,
+        organizationId: orgId
+      }
+    })
+
+    if (!incident) {
+      return NextResponse.json(
+        { error: "Incident not found" },
+        { status: 404 }
+      )
+    }
+
+    // Update incident status and add update message if provided
+    const data: any = {
+      status
+    }
+
+    if (message?.trim()) {
+      data.updates = {
+        create: {
+          message: message.trim(),
+          createdById: userId
+        }
+      }
+    }
+
+    // Update incident status
+    const updatedIncident = await prisma.incident.update({
+      where: {
+        id: params.incidentId
       },
+      data,
+      include: {
+        service: true,
+        updates: {
+          orderBy: {
+            createdAt: 'desc'
+          },
+          take: 10
+        }
+      }
     })
 
-    if (!existingIncident) {
-      return NextResponse.json({ error: "Incident not found" }, { status: 404 })
-    }
+    // Notify clients about the incident update
+    await pusherServer.trigger(orgId, "incident-status:updated", updatedIncident)
 
-    // Update the incident and create update in a transaction
-    const updatedIncident = await prisma.$transaction(async (tx) => {
-      // Update incident status
-      const incident = await tx.incident.update({
-        where: {
-          id: params.incidentId,
-        },
-        data: {
-          status: status as IncidentStatus,
-          resolvedAt: status === IncidentStatus.RESOLVED ? new Date() : null,
-        },
-      })
-
-      // Create the status update
-      await tx.incidentUpdate.create({
-        data: {
-          message: `Status changed to ${status.toLowerCase()}`,
-          incidentId: params.incidentId,
-        },
-      })
-
-      return tx.incident.findUnique({
-        where: { id: params.incidentId },
-        include: {
-          service: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-          updates: {
-            orderBy: {
-              createdAt: "desc",
-            },
-            take: 5,
-            select: {
-              id: true,
-              message: true,
-              createdAt: true,
-            },
-          },
-        },
-      })
-    })
-
-    // Send minimal data through Pusher
-    const pusherData = {
-      id: updatedIncident.id,
-      title: updatedIncident.title,
-      description: updatedIncident.description,
-      status: updatedIncident.status,
-      startedAt: updatedIncident.startedAt,
-      resolvedAt: updatedIncident.resolvedAt,
-      service: updatedIncident.service,
-      updates: updatedIncident.updates,
-    }
-
-    await pusherServer.trigger("incidents", "incident-updated", pusherData)
-    return NextResponse.json(updatedIncident)
+    return NextResponse.json({ success: true, incident: updatedIncident })
   } catch (error) {
-    console.error("Failed to update incident status:", error)
+    console.error("[INCIDENT_STATUS_PATCH]", error)
     return NextResponse.json(
-      { error: "Failed to update incident status" },
+      { error: "Internal Server Error" },
       { status: 500 }
     )
   }
